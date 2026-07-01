@@ -1,14 +1,35 @@
-import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
-import { 
-  Users, CheckCircle2, UserPlus, LogOut, Calendar, Clock, 
-  Wallet, Award, FileText, ArrowRight, Activity, Smile,
-  PlusCircle, RefreshCw, Send, Check, X, ShieldAlert, Sparkles
+import {
+  Activity,
+  ArrowRight,
+  Award,
+  Calendar,
+  Check,
+  CheckCircle2,
+  Clock,
+  PlusCircle,
+  ShieldAlert,
+  Smile,
+  Sparkles,
+  UserPlus,
+  Users,
+  Wallet,
+  X
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, 
-  BarChart, Bar, PieChart, Pie, Cell 
+import React, { useState } from 'react';
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis, YAxis
 } from 'recharts';
+import { useApp } from '../context/AppContext';
 
 export const Dashboard: React.FC = () => {
   const { 

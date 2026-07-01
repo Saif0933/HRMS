@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { Bot, CheckCircle, FileDown, LogIn, MessageSquare, Send, Sparkles, User, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { MessageSquare, X, Send, Bot, User, CornerDownLeft, Sparkles, LogIn, LogOut, CheckCircle, FileDown } from 'lucide-react';
 
 interface ChatMessage {
   sender: 'bot' | 'user';

@@ -1,9 +1,8 @@
+import {
+    Clock
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  HelpCircle, Plus, Check, X, ShieldAlert, Clock,
-  AlertCircle, MessageSquare, ArrowRight, User
-} from 'lucide-react';
 
 interface HelpTicket {
   id: string;

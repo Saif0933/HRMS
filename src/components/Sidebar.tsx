@@ -129,7 +129,6 @@ export const Sidebar: React.FC = () => {
       setOpenDropdown(openDropdown === item.id ? null : item.id);
       setActiveSubModule(item.subItems[0].id);
     } else {
-      setActiveSubModule('overview');
       setOpenDropdown(null);
     }
   };

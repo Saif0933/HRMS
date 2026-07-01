@@ -1,9 +1,12 @@
+import {
+  CheckCircle,
+  Frown,
+  Heart,
+  Laugh, Meh,
+  Send, Smile
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  Heart, MessageSquare, Share2, Send, Smile, Laugh, Meh, Frown, 
-  HelpCircle, ClipboardList, PlusCircle, CheckCircle, Sparkles
-} from 'lucide-react';
 
 export const Engagement: React.FC = () => {
   const { feedPosts, setFeedPosts, activeSubModule, setActiveSubModule, addAuditLog, employees } = useApp();

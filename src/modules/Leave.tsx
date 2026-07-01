@@ -1,9 +1,8 @@
+import {
+    Check, X
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  Calendar, CalendarDays, FileText, CheckCircle, Clock, 
-  Plus, Check, X, ShieldAlert, ArrowRight, User
-} from 'lucide-react';
 
 export const Leave: React.FC = () => {
   const { 

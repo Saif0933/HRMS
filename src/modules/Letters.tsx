@@ -1,9 +1,9 @@
+import {
+    Download,
+    FileSignature
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  FileText, Download, Edit, Printer, Plus, Check, 
-  HelpCircle, ArrowUpRight, CheckCircle, Mail, FileSignature
-} from 'lucide-react';
 
 export const Letters: React.FC = () => {
   const { activeSubModule, setActiveSubModule, addAuditLog, employees } = useApp();

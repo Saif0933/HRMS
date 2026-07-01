@@ -1,9 +1,12 @@
+import {
+  Camera,
+  Check,
+  Clock,
+  FileText,
+  X
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  Clock, MapPin, Camera, Smartphone, Calendar, FileText, CheckCircle, 
-  AlertTriangle, Upload, HelpCircle, ArrowRight, User, PlusCircle, Check, X
-} from 'lucide-react';
 
 interface RegularizationRequest {
   id: string;

@@ -1,9 +1,19 @@
+import {
+  Bell,
+  Calendar,
+  Check,
+  ChevronDown,
+  Globe,
+  HelpCircle,
+  MessageSquare,
+  Moon,
+  Search,
+  ShieldAlert,
+  Sun,
+  X
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp, UserRole } from '../context/AppContext';
-import { 
-  Bell, Search, Moon, Sun, Globe, MessageSquare, 
-  HelpCircle, Calendar, User, ChevronDown, Check, X, ShieldAlert, BookOpen
-} from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { 

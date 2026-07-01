@@ -73,6 +73,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [theme, setThemeState] = useState<'light' | 'dark'>('light');
   const [language, setLanguage] = useState<string>('en');
   const [userRole, setUserRole] = useState<UserRole>('HR Admin');
+  const getDefaultSubModule = (module: string): string => {
+    switch (module) {
+      case 'documents':
+        return 'vault';
+      case 'assets':
+        return 'register';
+      case 'letters':
+        return 'generate';
+      case 'helpdesk':
+        return 'tickets';
+      case 'employees':
+        return 'directory';
+      case 'attendance':
+        return 'punch';
+      case 'leave':
+        return 'apply';
+      case 'payroll':
+        return 'process';
+      case 'performance':
+        return 'goals';
+      case 'engagement':
+        return 'feed';
+      case 'claims':
+        return 'apply-claim';
+      case 'timesheets':
+        return 'entry';
+      case 'recruitment':
+        return 'jobs';
+      default:
+        return 'overview';
+    }
+  };
+
   const getInitialModule = () => {
     const path = window.location.pathname.replace('/', '');
     const validModules = [
@@ -84,10 +117,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [activeModule, setActiveModuleState] = useState<string>(getInitialModule());
-  const [activeSubModule, setActiveSubModule] = useState<string>('overview');
+  const [activeSubModule, setActiveSubModule] = useState<string>(getDefaultSubModule(getInitialModule()));
 
   const setActiveModule = (module: string) => {
     setActiveModuleState(module);
+    setActiveSubModule(getDefaultSubModule(module));
     window.history.pushState(null, '', `/${module}`);
   };
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('EMP001');
@@ -137,6 +171,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const handlePopState = () => {
       const path = window.location.pathname.replace('/', '') || 'dashboard';
       setActiveModuleState(path);
+      setActiveSubModule(getDefaultSubModule(path));
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);

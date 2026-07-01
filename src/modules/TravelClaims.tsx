@@ -1,9 +1,10 @@
+import {
+    Check,
+    Upload,
+    X
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  Plane, DollarSign, FileText, CheckCircle, Clock, 
-  Plus, Check, X, ShieldAlert, ArrowRight, User, Upload
-} from 'lucide-react';
 
 export const TravelClaims: React.FC = () => {
   const { 

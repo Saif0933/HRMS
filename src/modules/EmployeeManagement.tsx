@@ -1,12 +1,24 @@
-import React, { useState } from 'react';
-import { useApp, Employee } from '../context/AppContext';
-import { 
-  Search, Grid, List, ChevronRight, Filter, Download, Mail, 
-  Trash2, Edit, FileText, Landmark, User, FileSignature, 
-  MapPin, HelpCircle, Upload, CheckSquare, Plus, FileDown,
-  Printer, ArrowLeft, ArrowUpRight, ShieldCheck, HelpCircle as HelpIcon,
-  Trash, ChevronDown, Check, X, QrCode
+import {
+  ArrowLeft,
+  ChevronRight,
+  Download,
+  FileDown,
+  FileSignature,
+  FileText,
+  Filter,
+  Grid,
+  Landmark,
+  List,
+  Mail,
+  MapPin,
+  QrCode,
+  Search,
+  ShieldCheck,
+  Upload,
+  User
 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Employee, useApp } from '../context/AppContext';
 
 export const EmployeeManagement: React.FC = () => {
   const { 

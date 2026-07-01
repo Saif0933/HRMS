@@ -1,10 +1,9 @@
+import {
+    Download,
+    Landmark
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  Wallet, FileText, Calendar, CheckSquare, ShieldCheck, 
-  HelpCircle, Download, FileDown, Plus, CreditCard, Award, 
-  Percent, ArrowRight, Check, X, ShieldAlert, Landmark, Sparkles
-} from 'lucide-react';
 
 export const Payroll: React.FC = () => {
   const { employees, activeSubModule, setActiveSubModule, addAuditLog, userRole } = useApp();

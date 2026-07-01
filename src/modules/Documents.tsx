@@ -1,9 +1,12 @@
+import {
+  AlertTriangle,
+  Download,
+  FileText,
+  Folder,
+  Upload
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  Folder, FileText, Upload, Calendar, AlertTriangle, 
-  Download, Plus, Search, CheckCircle, Trash2, ArrowUpRight
-} from 'lucide-react';
 
 interface VaultDoc {
   id: string;

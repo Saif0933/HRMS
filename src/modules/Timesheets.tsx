@@ -1,9 +1,5 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  Clock, Plus, Check, X, ClipboardList, ShieldAlert,
-  HelpCircle, ArrowUpRight, CheckCircle
-} from 'lucide-react';
 
 export const Timesheets: React.FC = () => {
   const { activeSubModule, setActiveSubModule, addAuditLog, userRole, employees } = useApp();

@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
-import { 
-  Award, Target, UserCheck, Star, Plus, ShieldAlert,
-  HelpCircle, ArrowUpRight, BarChart3, TrendingUp, Check
+import {
+    Star
 } from 'lucide-react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import React, { useState } from 'react';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useApp } from '../context/AppContext';
 
 export const Performance: React.FC = () => {
   const { activeSubModule, setActiveSubModule, addAuditLog, employees } = useApp();

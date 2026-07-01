@@ -1,10 +1,8 @@
+import {
+    ArrowRight
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  UserPlus, FileText, CheckCircle, Clock, 
-  Plus, Check, X, ShieldAlert, ArrowRight, User, HelpCircle, 
-  Briefcase, KanbanSquare, CheckSquare
-} from 'lucide-react';
 
 interface Candidate {
   id: string;

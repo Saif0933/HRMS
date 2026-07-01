@@ -1,10 +1,12 @@
+import {
+    Download,
+    Key,
+    Monitor,
+    Printer,
+    Smartphone
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  Monitor, Smartphone, Key, Award, Plus, Check, X,
-  HelpCircle, ArrowUpRight, CheckCircle, QrCode, Printer, 
-  Trash2, ShieldCheck, Download
-} from 'lucide-react';
 
 interface AssetRecord {
   id: string;
