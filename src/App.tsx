@@ -19,9 +19,14 @@ import { Documents } from './modules/Documents';
 import { Assets } from './modules/Assets';
 import { Letters } from './modules/Letters';
 import { HelpDesk } from './modules/HelpDesk';
+import { Login } from './modules/Login';
 
 const MainLayout: React.FC = () => {
-  const { activeModule, theme } = useApp();
+  const { activeModule, theme, isAuthenticated } = useApp();
+
+  if (!isAuthenticated) {
+    return <Login />;
+  }
 
   return (
     <div className={`flex h-screen overflow-hidden ${theme === 'dark' ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>

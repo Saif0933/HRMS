@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Globe,
   HelpCircle,
+  LogOut,
   MessageSquare,
   Moon,
   Search,
@@ -22,7 +23,8 @@ export const Navbar: React.FC = () => {
     userRole, setUserRole, 
     setActiveModule, setActiveSubModule,
     notifications, markAllNotificationsRead, clearNotification,
-    globalSearch, setGlobalSearch
+    globalSearch, setGlobalSearch,
+    currentUser, logout
   } = useApp();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -31,13 +33,13 @@ export const Navbar: React.FC = () => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const currentUserName = userRole === 'HR Admin' ? 'Karan Johar' : userRole === 'Manager' ? 'Neha Patel' : 'Aarav Sharma';
-  const currentUserRoleText = userRole === 'HR Admin' ? 'HR Administrator' : userRole === 'Manager' ? 'Engineering Manager' : 'Senior UI Developer';
-  const currentUserAvatar = userRole === 'HR Admin' 
+  const currentUserName = currentUser ? currentUser.name : (userRole === 'HR Admin' ? 'Karan Johar' : userRole === 'Manager' ? 'Neha Patel' : 'Aarav Sharma');
+  const currentUserRoleText = currentUser ? currentUser.role : (userRole === 'HR Admin' ? 'HR Administrator' : userRole === 'Manager' ? 'Engineering Manager' : 'Senior UI Developer');
+  const currentUserAvatar = currentUser ? currentUser.avatar : (userRole === 'HR Admin' 
     ? "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&q=80&w=120"
     : userRole === 'Manager'
     ? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120"
-    : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120";
+    : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120");
 
   const languages = [
     { code: 'en', name: 'English (US)' },
@@ -265,6 +267,14 @@ export const Navbar: React.FC = () => {
                 className="w-full text-left px-4 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-350"
               >
                 Preferences
+              </button>
+              <div className="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+              <button 
+                onClick={() => { logout(); setShowProfile(false); }}
+                className="w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 font-semibold transition-colors flex items-center gap-1.5"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Sign Out
               </button>
             </div>
           )}

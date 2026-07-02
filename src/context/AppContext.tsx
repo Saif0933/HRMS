@@ -65,11 +65,20 @@ interface AppContextType {
   setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
   markAllNotificationsRead: () => void;
   clearNotification: (id: string) => void;
+
+  // Authentication State
+  isAuthenticated: boolean;
+  setIsAuthenticated: (auth: boolean) => void;
+  currentUser: Employee | null;
+  setCurrentUser: (emp: Employee | null) => void;
+  logout: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [currentUser, setCurrentUser] = useState<Employee | null>(null);
   const [theme, setThemeState] = useState<'light' | 'dark'>('light');
   const [language, setLanguage] = useState<string>('en');
   const [userRole, setUserRole] = useState<UserRole>('HR Admin');
@@ -208,6 +217,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
+  const logout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setActiveModule('dashboard');
+  };
+
   return (
     <AppContext.Provider value={{
       theme, setTheme,
@@ -227,7 +242,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       globalSearch, setGlobalSearch,
       notifications, setNotifications,
       markAllNotificationsRead,
-      clearNotification
+      clearNotification,
+      isAuthenticated,
+      setIsAuthenticated,
+      currentUser,
+      setCurrentUser,
+      logout
     }}>
       {children}
     </AppContext.Provider>
