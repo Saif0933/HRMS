@@ -1,7 +1,9 @@
 import {
     Check,
     Upload,
-    X
+    X,
+    Paperclip,
+    FileText
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
@@ -19,6 +21,14 @@ export const TravelClaims: React.FC = () => {
   const [amount, setAmount] = useState(1500);
   const [date, setDate] = useState('2026-07-01');
   const [reason, setReason] = useState('Uber Cab to Client office BKC');
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setReceiptFile(e.target.files[0]);
+    }
+  };
 
   const handleApplyClaim = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +40,8 @@ export const TravelClaims: React.FC = () => {
       amount,
       date,
       reason,
-      status: 'Pending' as const
+      status: 'Pending' as const,
+      receiptUrl: receiptFile ? receiptFile.name : undefined
     };
     setClaims(prev => [newClaim, ...prev]);
     addAuditLog("Applied Claim", "Travel & Claims", `${activeUser.name} submitted expense claim of ₹${amount} for ${reason}`);
@@ -38,6 +49,10 @@ export const TravelClaims: React.FC = () => {
     
     setReason('');
     setAmount(1500);
+    setReceiptFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     setActiveSubModule('my-claims');
   };
 
@@ -138,10 +153,47 @@ export const TravelClaims: React.FC = () => {
 
               <div className="space-y-1">
                 <label className="text-slate-400 font-medium">Receipt Invoice Upload</label>
-                <div className="border border-dashed rounded-lg p-4 text-center bg-slate-50 dark:bg-slate-950 cursor-pointer">
-                  <Upload className="h-5 w-5 text-slate-400 mx-auto mb-1" />
-                  <span className="text-[10px] text-slate-500 font-semibold">Upload receipt PDF / JPEG</span>
-                </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  accept=".pdf,image/*"
+                />
+                {!receiptFile ? (
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center bg-slate-50 dark:bg-slate-950 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors"
+                  >
+                    <Upload className="h-5 w-5 text-slate-400 mx-auto mb-1" />
+                    <span className="text-[10px] text-slate-500 font-semibold">Upload receipt PDF / JPEG</span>
+                  </div>
+                ) : (
+                  <div className="border rounded-lg p-3 flex items-center justify-between bg-slate-50 dark:bg-slate-950 border-primary/30">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <FileText className="h-5 w-5 text-primary shrink-0" />
+                      <div className="text-left overflow-hidden">
+                        <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate">
+                          {receiptFile.name}
+                        </p>
+                        <p className="text-[9px] text-slate-400">
+                          {(receiptFile.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setReceiptFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                      className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -201,6 +253,12 @@ export const TravelClaims: React.FC = () => {
                   <p className="text-slate-500 dark:text-slate-400 mt-1">
                     Amount: <span className="font-semibold">₹{claim.amount.toLocaleString()}</span> • Purpose: "{claim.reason}"
                   </p>
+                  {claim.receiptUrl && (
+                    <div className="mt-1.5 flex items-center gap-1 text-[10px] text-primary dark:text-blue-400 font-medium bg-primary/5 dark:bg-blue-950/20 px-2 py-0.5 rounded-md w-fit">
+                      <Paperclip className="h-3 w-3 shrink-0" />
+                      <span className="truncate max-w-[180px]">{claim.receiptUrl}</span>
+                    </div>
+                  )}
                 </div>
                 <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${
                   claim.status === 'Approved' ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300' :
@@ -242,6 +300,12 @@ export const TravelClaims: React.FC = () => {
                       Amount: <span className="font-bold">₹{claim.amount.toLocaleString()}</span> • Applied Date: {claim.date}
                     </p>
                     <p className="text-slate-450 mt-0.5">Reason: "{claim.reason}"</p>
+                    {claim.receiptUrl && (
+                      <div className="mt-1.5 flex items-center gap-1 text-[10px] text-primary dark:text-blue-400 font-medium bg-primary/5 dark:bg-blue-950/20 px-2 py-0.5 rounded-md w-fit">
+                        <Paperclip className="h-3 w-3 shrink-0" />
+                        <span className="truncate max-w-[180px]">{claim.receiptUrl}</span>
+                      </div>
+                    )}
                   </div>
                   
                   {userRole === 'Employee' ? (
