@@ -3,7 +3,10 @@ import {
   Check,
   Clock,
   FileText,
-  X
+  X,
+  Search,
+  Filter,
+  Download
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
@@ -41,6 +44,11 @@ export const Attendance: React.FC = () => {
   const [regInTime, setRegInTime] = useState('09:30');
   const [regOutTime, setRegOutTime] = useState('18:30');
   const [regReason, setRegReason] = useState('Card not registered at turnstile');
+
+  // Attendance Reports State
+  const [reportMonth, setReportMonth] = useState('June');
+  const [reportYear, setReportYear] = useState('2026');
+  const [reportSearch, setReportSearch] = useState('');
 
   // Roster states
   const [rosterWeek, setRosterWeek] = useState('Week 27 (Jul 1 - Jul 5)');
@@ -149,6 +157,16 @@ export const Attendance: React.FC = () => {
           }`}
         >
           Muster Roll Calendar
+        </button>
+        <button 
+          onClick={() => setActiveSubModule('reports')}
+          className={`py-3 px-5 text-sm font-semibold border-b-2 transition-all ${
+            activeSubModule === 'reports' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          Attendance Reports
         </button>
       </div>
 
@@ -506,6 +524,176 @@ export const Attendance: React.FC = () => {
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-400"></span>WeekOff</span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ======================================= */}
+      {/* 5. ATTENDANCE REPORTS                   */}
+      {/* ======================================= */}
+      {activeSubModule === 'reports' && (
+        <div className="space-y-6 animate-fade-in text-xs">
+          
+          {/* Top Control Bar & Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            
+            {/* Filter controls */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+              <h4 className="font-bold text-slate-800 dark:text-white text-xs border-b pb-1.5 flex items-center gap-1.5">
+                <Filter className="h-3.5 w-3.5 text-primary" />
+                Select Month & Year
+              </h4>
+              <div className="flex gap-2">
+                <select 
+                  value={reportMonth} 
+                  onChange={(e) => setReportMonth(e.target.value)}
+                  className="w-1/2 px-2 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
+                >
+                  <option value="January">January</option>
+                  <option value="February">February</option>
+                  <option value="March">March</option>
+                  <option value="April">April</option>
+                  <option value="May">May</option>
+                  <option value="June">June</option>
+                  <option value="July">July</option>
+                  <option value="August">August</option>
+                  <option value="September">September</option>
+                  <option value="October">October</option>
+                  <option value="November">November</option>
+                  <option value="December">December</option>
+                </select>
+                <select 
+                  value={reportYear} 
+                  onChange={(e) => setReportYear(e.target.value)}
+                  className="w-1/2 px-2 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
+                >
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Average Attendance Stat */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase">Average Attendance Rate</span>
+                <h3 className="text-xl font-extrabold text-emerald-500 mt-1">94.8%</h3>
+              </div>
+              <span className="text-[9px] text-slate-400 mt-2">Target benchmark: &gt;95.0%</span>
+            </div>
+
+            {/* Late Arrivals Stat */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase">Late Arrival Percentage</span>
+                <h3 className="text-xl font-extrabold text-amber-500 mt-1">3.1%</h3>
+              </div>
+              <span className="text-[9px] text-slate-400 mt-2">Grace period allowed: 10 mins</span>
+            </div>
+
+            {/* Total Man-Hours worked */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase">Total Work Hours Tracked</span>
+                <h3 className="text-xl font-extrabold text-primary mt-1">
+                  {(employees.length * 22 * 8).toLocaleString()} Hrs
+                </h3>
+              </div>
+              <span className="text-[9px] text-slate-400 mt-2">Based on 22 billing days</span>
+            </div>
+
+          </div>
+
+          {/* Main Register Table Card */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b pb-3">
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-white text-sm">Monthly Attendance Summary Register</h3>
+                <p className="text-[10px] text-slate-400">Detailed breakdown of login averages, punctuality, and attendance rates.</p>
+              </div>
+              
+              {/* Search / Filters */}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:flex-none">
+                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Search Employee..." 
+                    value={reportSearch}
+                    onChange={(e) => setReportSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350 w-full sm:w-48 text-[11px]" 
+                  />
+                </div>
+                <button 
+                  onClick={() => alert("Exporting Attendance Summary to CSV...")}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border text-slate-700 dark:text-slate-300 rounded-lg font-bold"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download Report</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="border rounded-xl overflow-hidden overflow-x-auto">
+              <table className="w-full text-xs text-left min-w-[800px]">
+                <thead className="bg-slate-50 dark:bg-slate-950 text-slate-400 font-semibold border-b">
+                  <tr>
+                    <th className="p-3">Employee ID</th>
+                    <th className="p-3">Employee Name</th>
+                    <th className="p-3">Department</th>
+                    <th className="p-3 text-center">Present</th>
+                    <th className="p-3 text-center">Late</th>
+                    <th className="p-3 text-center">Absent</th>
+                    <th className="p-3 text-center">Avg Login</th>
+                    <th className="p-3 text-right">Total Hours</th>
+                    <th className="p-3 text-center">Attendance Rate</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y text-slate-650 dark:text-slate-350">
+                  {employees
+                    .filter(emp => emp.name.toLowerCase().includes(reportSearch.toLowerCase()))
+                    .map((emp) => {
+                      const presentDays = emp.id === 'EMP001' ? 21 : emp.id === 'EMP002' ? 22 : emp.id === 'EMP003' ? 18 : 20;
+                      const lateDays = emp.id === 'EMP001' ? 1 : emp.id === 'EMP002' ? 0 : emp.id === 'EMP003' ? 3 : 2;
+                      const absentDays = emp.id === 'EMP003' ? 4 : emp.id === 'EMP008' ? 1 : 0;
+                      const totalHours = presentDays * 8.5;
+                      const avgLogin = emp.id === 'EMP001' ? '09:12 AM' : emp.id === 'EMP002' ? '09:05 AM' : '09:28 AM';
+                      const attendanceRate = Math.round((presentDays / 22) * 100);
+
+                      return (
+                        <tr key={emp.id} className="hover:bg-slate-50 dark:hover:bg-slate-850">
+                          <td className="p-3 font-semibold text-slate-500">{emp.id}</td>
+                          <td className="p-3 font-bold text-slate-800 dark:text-white">{emp.name}</td>
+                          <td className="p-3 text-slate-600 dark:text-slate-300">{emp.department}</td>
+                          <td className="p-3 text-center font-bold text-green-500">{presentDays}</td>
+                          <td className="p-3 text-center font-bold text-amber-500">{lateDays}</td>
+                          <td className="p-3 text-center font-bold text-red-500">{absentDays}</td>
+                          <td className="p-3 text-center text-slate-600 dark:text-slate-350">{avgLogin}</td>
+                          <td className="p-3 text-right font-semibold">
+                            {totalHours.toFixed(1)} Hrs
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-2 justify-center">
+                              <div className="w-16 bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden shrink-0">
+                                <div 
+                                  className={`h-full rounded-full ${
+                                    attendanceRate >= 95 ? 'bg-green-500' :
+                                    attendanceRate >= 90 ? 'bg-amber-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${attendanceRate}%` }}
+                                ></div>
+                              </div>
+                              <span className="font-bold text-[10px] w-8 text-right">{attendanceRate}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       )}
 

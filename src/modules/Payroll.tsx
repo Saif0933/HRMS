@@ -1,6 +1,13 @@
 import {
     Download,
-    Landmark
+    Landmark,
+    FileText,
+    FileSpreadsheet,
+    Search,
+    Filter,
+    Calendar,
+    Building,
+    CheckCircle2
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
@@ -17,6 +24,12 @@ export const Payroll: React.FC = () => {
   const [bonusAmount, setBonusAmount] = useState(0);
   const [arrearCalculated, setArrearCalculated] = useState(false);
   const [incrementPercentage, setIncrementPercentage] = useState(0);
+
+  // Reports & ECR State
+  const [reportMonth, setReportMonth] = useState('June');
+  const [reportYear, setReportYear] = useState('2026');
+  const [reportSearch, setReportSearch] = useState('');
+  const [ecrGenerated, setEcrGenerated] = useState(false);
 
   // Loans State
   const [loans, setLoans] = useState([
@@ -112,6 +125,16 @@ export const Payroll: React.FC = () => {
           }`}
         >
           Payslip & Templates
+        </button>
+        <button 
+          onClick={() => setActiveSubModule('reports')}
+          className={`py-3 px-5 text-sm font-semibold border-b-2 transition-all ${
+            activeSubModule === 'reports' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          Payroll Reports & ECR
         </button>
       </div>
 
@@ -517,6 +540,220 @@ export const Payroll: React.FC = () => {
             )}
 
           </div>
+        </div>
+      )}
+
+      {/* ======================================= */}
+      {/* 5. PAYROLL REPORTS & ECR                */}
+      {/* ======================================= */}
+      {activeSubModule === 'reports' && (
+        <div className="space-y-6 animate-fade-in text-xs">
+          
+          {/* Top Control Bar & Stats */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            
+            {/* Filter controls */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3 lg:col-span-1">
+              <h4 className="font-bold text-slate-800 dark:text-white text-xs border-b pb-1.5 flex items-center gap-1.5">
+                <Filter className="h-3.5 w-3.5 text-primary" />
+                Report Filters
+              </h4>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-slate-400 font-medium">Select Month</label>
+                  <select 
+                    value={reportMonth} 
+                    onChange={(e) => setReportMonth(e.target.value)}
+                    className="w-full px-2 py-1.5 mt-1 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
+                  >
+                    <option value="January">January</option>
+                    <option value="February">February</option>
+                    <option value="March">March</option>
+                    <option value="April">April</option>
+                    <option value="May">May</option>
+                    <option value="June">June</option>
+                    <option value="July">July</option>
+                    <option value="August">August</option>
+                    <option value="September">September</option>
+                    <option value="October">October</option>
+                    <option value="November">November</option>
+                    <option value="December">December</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 font-medium">Select Year</label>
+                  <select 
+                    value={reportYear} 
+                    onChange={(e) => setReportYear(e.target.value)}
+                    className="w-full px-2 py-1.5 mt-1 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
+                  >
+                    <option value="2025">2025</option>
+                    <option value="2026">2026</option>
+                    <option value="2027">2027</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Statutory Stats Card: EPF */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between lg:col-span-1">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase">EPF Wages (Statutory Capped)</span>
+                <h3 className="text-xl font-extrabold text-slate-800 dark:text-white mt-1">
+                  ₹{(employees.length * 15000).toLocaleString()}
+                </h3>
+              </div>
+              <span className="text-[9px] text-slate-400 mt-2">Capped at ₹15,000 per member per month</span>
+            </div>
+
+            {/* Statutory Stats Card: EPF Contribution */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between lg:col-span-1">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase">Total PF Contribution (12%)</span>
+                <h3 className="text-xl font-extrabold text-primary mt-1">
+                  ₹{(employees.length * 15000 * 0.12).toLocaleString()}
+                </h3>
+              </div>
+              <span className="text-[9px] text-emerald-500 font-semibold mt-2">100% compliant with EPFO rules</span>
+            </div>
+
+            {/* Action Card: ECR Generation */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between lg:col-span-1">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase">Electronic Challan (ECR)</span>
+                <p className="text-slate-500 mt-1">Generate text file formatted for EPFO unified portal upload.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setEcrGenerated(true);
+                  addAuditLog("Generated ECR File", "Payroll Processing", `Generated PF ECR Challan file for ${reportMonth} ${reportYear}`);
+                  alert(`ECR file for ${reportMonth} ${reportYear} generated successfully!`);
+                }}
+                className="w-full py-2 bg-primary text-white rounded-xl font-bold hover:scale-105 transition-all shadow-md mt-2 flex items-center justify-center gap-1.5"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Generate ECR text file
+              </button>
+            </div>
+
+          </div>
+
+          {/* Main content grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* ECR Text Preview (collapsible/visible if generated) */}
+            {ecrGenerated && (
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-3 animate-fade-in">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4.5 w-4.5 text-green-500" />
+                    <h3 className="font-bold text-slate-800 dark:text-white text-sm">EPFO ECR File Preview ({reportMonth} {reportYear})</h3>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      alert("Downloading ECR txt file...");
+                    }}
+                    className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition-colors"
+                  >
+                    <Download className="h-3 w-3" /> Download ECR
+                  </button>
+                </div>
+                <div className="bg-slate-950 text-slate-350 p-4 rounded-xl font-mono text-[10px] space-y-1 overflow-x-auto max-h-48 overflow-y-auto">
+                  {employees.map((emp) => {
+                    const uan = emp.uan || "100293049102";
+                    const epfWages = Math.min(emp.basic, 15000);
+                    const epsWages = Math.min(emp.basic, 15000);
+                    const edliWages = Math.min(emp.basic, 15000);
+                    const epfCont = Math.round(epfWages * 0.12);
+                    const epsCont = Math.round(epsWages * 0.0833);
+                    const diffCont = epfCont - epsCont;
+                    return (
+                      <div key={emp.id} className="whitespace-nowrap">
+                        {uan}#{emp.name}#{epfWages}#{epsWages}#{edliWages}#{epfCont}#{epsCont}#{diffCont}#0#0
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-400 italic">Format: UAN#MemberName#EPFWages#EPSWages#EDLIWages#EPFCont#EPSCont#EmployerDiff#NCPDays#RefundOfAdvances</p>
+              </div>
+            )}
+
+            {/* Payroll register list */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b pb-3">
+                <h3 className="font-bold text-slate-800 dark:text-white text-sm">Monthly Payroll Register & Statutory Deductions</h3>
+                
+                {/* Search / Filters */}
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="relative flex-1 sm:flex-none">
+                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                    <input 
+                      type="text" 
+                      placeholder="Search Employee..." 
+                      value={reportSearch}
+                      onChange={(e) => setReportSearch(e.target.value)}
+                      className="pl-8 pr-3 py-1.5 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350 w-full sm:w-48 text-[11px]" 
+                    />
+                  </div>
+                  <button 
+                    onClick={() => alert("Exporting report as Excel...")}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border text-slate-700 dark:text-slate-350 rounded-lg font-bold"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" />
+                    <span>Export</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="border rounded-xl overflow-hidden overflow-x-auto">
+                <table className="w-full text-xs text-left min-w-[800px]">
+                  <thead className="bg-slate-50 dark:bg-slate-950 text-slate-400 font-semibold border-b">
+                    <tr>
+                      <th className="p-3">UAN / Emp ID</th>
+                      <th className="p-3">Employee Name</th>
+                      <th className="p-3">Basic Salary</th>
+                      <th className="p-3">EPF Wages</th>
+                      <th className="p-3">EPS Wages</th>
+                      <th className="p-3 text-right">EE PF (12%)</th>
+                      <th className="p-3 text-right">ER EPS (8.33%)</th>
+                      <th className="p-3 text-right">ER EPF Diff (3.67%)</th>
+                      <th className="p-3 text-right">Gross Deductions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y text-slate-650 dark:text-slate-350">
+                    {employees
+                      .filter(emp => emp.name.toLowerCase().includes(reportSearch.toLowerCase()))
+                      .map((emp) => {
+                        const epfWages = Math.min(emp.basic, 15000);
+                        const epsWages = Math.min(emp.basic, 15000);
+                        const epfCont = Math.round(epfWages * 0.12);
+                        const epsCont = Math.round(epsWages * 0.0833);
+                        const diffCont = epfCont - epsCont;
+                        return (
+                          <tr key={emp.id} className="hover:bg-slate-50 dark:hover:bg-slate-850">
+                            <td className="p-3">
+                              <p className="font-bold text-slate-800 dark:text-white">{emp.uan || "100293049102"}</p>
+                              <span className="text-[9px] text-slate-400">{emp.id}</span>
+                            </td>
+                            <td className="p-3 font-semibold text-slate-700 dark:text-slate-200">{emp.name}</td>
+                            <td className="p-3">₹{emp.basic.toLocaleString()}</td>
+                            <td className="p-3">₹{epfWages.toLocaleString()}</td>
+                            <td className="p-3">₹{epsWages.toLocaleString()}</td>
+                            <td className="p-3 text-right font-semibold text-slate-800 dark:text-white">₹{epfCont.toLocaleString()}</td>
+                            <td className="p-3 text-right">₹{epsCont.toLocaleString()}</td>
+                            <td className="p-3 text-right">₹{diffCont.toLocaleString()}</td>
+                            <td className="p-3 text-right font-bold text-red-500">₹{emp.deductions.toLocaleString()}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
         </div>
       )}
 
