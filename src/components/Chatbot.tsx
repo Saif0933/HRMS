@@ -28,7 +28,7 @@ export const Chatbot: React.FC = () => {
   const [inputVal, setInputVal] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const currentUser = employees.find(e => e.id === (userRole === 'HR Admin' ? 'EMP006' : userRole === 'Manager' ? 'EMP002' : 'EMP001')) || employees[0];
+  const currentUser = employees.find(e => e.id === (userRole === 'Super Admin' ? 'EMP005' : userRole === 'HR Admin' ? 'EMP006' : userRole === 'Manager' ? 'EMP002' : 'EMP001')) || employees[0];
 
   useEffect(() => {
     if (messagesEndRef.current) {

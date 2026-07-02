@@ -139,7 +139,7 @@ export const HelpDesk: React.FC = () => {
                     {t.status}
                   </span>
 
-                  {t.status !== 'Resolved' && userRole === 'HR Admin' && (
+                  {t.status !== 'Resolved' && (userRole === 'HR Admin' || userRole === 'Super Admin') && (
                     <button 
                       onClick={() => handleResolveTicket(t.id, t.subject)}
                       className="px-3 py-1 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-colors"

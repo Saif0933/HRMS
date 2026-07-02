@@ -6,7 +6,7 @@ import {
 
 export type { Employee, LeaveRequest, ClaimRequest, HelpTicket, FeedPost, Asset };
 
-export type UserRole = 'HR Admin' | 'Manager' | 'Employee';
+export type UserRole = 'Super Admin' | 'HR Admin' | 'Manager' | 'Employee';
 
 export interface AuditLog {
   id: string;
@@ -77,11 +77,46 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [currentUser, setCurrentUser] = useState<Employee | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('isAuthenticated') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [currentUser, setCurrentUser] = useState<Employee | null>(() => {
+    try {
+      const stored = localStorage.getItem('currentUser');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [theme, setThemeState] = useState<'light' | 'dark'>('light');
   const [language, setLanguage] = useState<string>('en');
-  const [userRole, setUserRole] = useState<UserRole>('HR Admin');
+  const [userRole, setUserRole] = useState<UserRole>(() => {
+    try {
+      return (localStorage.getItem('userRole') as UserRole) || 'HR Admin';
+    } catch {
+      return 'HR Admin';
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('isAuthenticated', String(isAuthenticated));
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('currentUser');
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    localStorage.setItem('userRole', userRole);
+  }, [userRole]);
   const getDefaultSubModule = (module: string): string => {
     switch (module) {
       case 'documents':
@@ -220,6 +255,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const logout = () => {
     setIsAuthenticated(false);
     setCurrentUser(null);
+    localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('userRole');
     setActiveModule('dashboard');
   };
 

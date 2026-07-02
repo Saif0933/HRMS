@@ -82,7 +82,7 @@ export const Attendance: React.FC = () => {
     e.preventDefault();
     const newReq: RegularizationRequest = {
       id: `REG${Math.floor(Math.random() * 1000)}`,
-      employeeName: userRole === 'HR Admin' ? 'Karan Johar' : userRole === 'Manager' ? 'Neha Patel' : 'Aarav Sharma',
+      employeeName: userRole === 'Super Admin' ? 'Vikram Malhotra' : userRole === 'HR Admin' ? 'Karan Johar' : userRole === 'Manager' ? 'Neha Patel' : 'Aarav Sharma',
       date: regDate,
       timeIn: regInTime,
       timeOut: regOutTime,
@@ -400,7 +400,7 @@ export const Attendance: React.FC = () => {
                     </div>
                     
                     <div className="flex items-center gap-3">
-                      {req.status === 'Pending' && userRole === 'HR Admin' ? (
+                      {req.status === 'Pending' && (userRole === 'HR Admin' || userRole === 'Super Admin') ? (
                         <div className="flex gap-1.5">
                           <button 
                             onClick={() => handleApproveReg(req.id, req.employeeName, req.date)}

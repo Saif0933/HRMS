@@ -33,9 +33,11 @@ export const Navbar: React.FC = () => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const currentUserName = currentUser ? currentUser.name : (userRole === 'HR Admin' ? 'Karan Johar' : userRole === 'Manager' ? 'Neha Patel' : 'Aarav Sharma');
-  const currentUserRoleText = currentUser ? currentUser.role : (userRole === 'HR Admin' ? 'HR Administrator' : userRole === 'Manager' ? 'Engineering Manager' : 'Senior UI Developer');
-  const currentUserAvatar = currentUser ? currentUser.avatar : (userRole === 'HR Admin' 
+  const currentUserName = currentUser ? currentUser.name : (userRole === 'Super Admin' ? 'Vikram Malhotra' : userRole === 'HR Admin' ? 'Karan Johar' : userRole === 'Manager' ? 'Neha Patel' : 'Aarav Sharma');
+  const currentUserRoleText = currentUser ? currentUser.role : (userRole === 'Super Admin' ? 'Chief Executive Officer' : userRole === 'HR Admin' ? 'HR Administrator' : userRole === 'Manager' ? 'Engineering Manager' : 'Senior UI Developer');
+  const currentUserAvatar = currentUser ? currentUser.avatar : (userRole === 'Super Admin'
+    ? "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=120"
+    : userRole === 'HR Admin' 
     ? "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&q=80&w=120"
     : userRole === 'Manager'
     ? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120"
@@ -238,7 +240,7 @@ export const Navbar: React.FC = () => {
               {/* Interactive Role Switcher */}
               <div className="p-2">
                 <span className="text-[10px] text-slate-400 font-bold uppercase px-2 mb-1.5 block">Switch Workspace Role</span>
-                {(['HR Admin', 'Manager', 'Employee'] as UserRole[]).map((role) => (
+                {(['Super Admin', 'HR Admin', 'Manager', 'Employee'] as UserRole[]).map((role) => (
                   <button
                     key={role}
                     onClick={() => handleRoleChange(role)}

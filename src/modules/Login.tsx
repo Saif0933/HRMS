@@ -26,6 +26,14 @@ export const Login: React.FC = () => {
   // Filter out a few interesting employees for quick-login shortcuts
   const demoUsers = [
     {
+      id: 'EMP005',
+      name: 'Vikram Malhotra',
+      role: 'Chief Executive Officer (Super Admin)',
+      phone: '9000011111',
+      avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=120',
+      systemRole: 'Super Admin' as const
+    },
+    {
       id: 'EMP006',
       name: 'Karan Johar',
       role: 'HR Generalist (HR Admin)',
@@ -144,8 +152,10 @@ export const Login: React.FC = () => {
       });
 
       if (matchedEmployee) {
-        let role: 'HR Admin' | 'Manager' | 'Employee' = 'Employee';
-        if (matchedEmployee.name === 'Karan Johar' || matchedEmployee.name === 'Shalini Sen' || matchedEmployee.department === 'Human Resources') {
+        let role: 'Super Admin' | 'HR Admin' | 'Manager' | 'Employee' = 'Employee';
+        if (matchedEmployee.name === 'Vikram Malhotra' || matchedEmployee.role === 'Chief Executive Officer') {
+          role = 'Super Admin';
+        } else if (matchedEmployee.name === 'Karan Johar' || matchedEmployee.name === 'Shalini Sen' || matchedEmployee.department === 'Human Resources') {
           role = 'HR Admin';
         } else if (matchedEmployee.name === 'Neha Patel' || matchedEmployee.role.includes('Manager')) {
           role = 'Manager';

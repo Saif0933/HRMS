@@ -92,7 +92,7 @@ export const Dashboard: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            Welcome back, {userRole === 'HR Admin' ? 'Karan' : userRole === 'Manager' ? 'Neha' : 'Aarav'}! 
+            Welcome back, {userRole === 'Super Admin' ? 'Vikram' : userRole === 'HR Admin' ? 'Karan' : userRole === 'Manager' ? 'Neha' : 'Aarav'}! 
             <Sparkles className="h-5 w-5 text-yellow-500 animate-pulse" />
           </h1>
           <p className="text-sm text-slate-500 mt-1">Here is a quick snapshot of the enterprise dashboard today, July 1, 2026.</p>
