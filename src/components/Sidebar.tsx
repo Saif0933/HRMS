@@ -30,7 +30,8 @@ export const Sidebar: React.FC = () => {
         { id: 'orgchart', label: 'Organization Chart' },
         { id: 'exit', label: 'Exit & Settlement' },
         { id: 'bulk', label: 'Bulk Imports & Exports' },
-        { id: 'roles', label: 'Role & Permissions' }
+        { id: 'roles', label: 'Role & Permissions' },
+        { id: 'departments', label: 'Departments' }
       ]
     },
     { 

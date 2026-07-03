@@ -28,6 +28,13 @@ import {
   useUpdateRole
 } from '../api/hook/useRole';
 import { Employee, useApp } from '../context/AppContext';
+import {
+  useDepartments,
+  useCreateDepartment,
+  useUpdateDepartment,
+  useDeleteDepartment,
+  Department
+} from '../api/hook/useDepartment';
 
 const RoleManagementPanel: React.FC = () => {
   const { data: rolesResponse, isLoading: rolesLoading } = useRoles();
@@ -380,11 +387,362 @@ const RoleManagementPanel: React.FC = () => {
   );
 };
 
+const DepartmentManagementPanel: React.FC = () => {
+  const { data: deptsResponse, isLoading: deptsLoading } = useDepartments();
+  const { employees } = useApp();
+
+  const createDeptMutation = useCreateDepartment();
+  const updateDeptMutation = useUpdateDepartment();
+  const deleteDeptMutation = useDeleteDepartment();
+
+  const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
+  const [newDeptName, setNewDeptName] = useState('');
+  const [newDeptCode, setNewDeptCode] = useState('');
+  const [newDeptDesc, setNewDeptDesc] = useState('');
+  const [newDeptManagerId, setNewDeptManagerId] = useState('');
+  const [newDeptParentId, setNewDeptParentId] = useState('');
+
+  const [editMode, setEditMode] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editCode, setEditCode] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editManagerId, setEditManagerId] = useState('');
+  const [editParentId, setEditParentId] = useState('');
+
+  const departments = deptsResponse?.data || [];
+  const activeDept = departments.find(d => d.id === selectedDeptId);
+
+  const handleCreateDepartment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDeptName || !newDeptCode) return;
+    createDeptMutation.mutate({
+      name: newDeptName,
+      code: newDeptCode.toUpperCase(),
+      description: newDeptDesc,
+      managerId: newDeptManagerId || null,
+      parentId: newDeptParentId || null
+    }, {
+      onSuccess: () => {
+        setNewDeptName('');
+        setNewDeptCode('');
+        setNewDeptDesc('');
+        setNewDeptManagerId('');
+        setNewDeptParentId('');
+        alert("Department created successfully!");
+      },
+      onError: (err) => alert(err.message)
+    });
+  };
+
+  const handleUpdateDepartment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDeptId || !editName || !editCode) return;
+    updateDeptMutation.mutate({
+      id: selectedDeptId,
+      data: {
+        name: editName,
+        code: editCode.toUpperCase(),
+        description: editDesc,
+        managerId: editManagerId || null,
+        parentId: editParentId || null
+      }
+    }, {
+      onSuccess: () => {
+        setEditMode(false);
+        alert("Department updated successfully!");
+      },
+      onError: (err) => alert(err.message)
+    });
+  };
+
+  const handleDeleteDepartment = (id: string) => {
+    if (confirm("Are you sure you want to delete this department?")) {
+      deleteDeptMutation.mutate(id, {
+        onSuccess: () => {
+          if (selectedDeptId === id) setSelectedDeptId(null);
+          alert("Department deleted successfully!");
+        },
+        onError: (err) => alert(err.message)
+      });
+    }
+  };
+
+  const startEdit = (dept: Department) => {
+    setSelectedDeptId(dept.id);
+    setEditName(dept.name);
+    setEditCode(dept.code);
+    setEditDesc(dept.description || '');
+    setEditManagerId(dept.managerId || '');
+    setEditParentId(dept.parentId || '');
+    setEditMode(true);
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in text-xs">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Left Column: Departments list */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+          <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Departments Registry</h3>
+          {deptsLoading ? (
+            <p className="text-slate-400">Loading departments list...</p>
+          ) : departments.length === 0 ? (
+            <p className="text-slate-400">No departments found. Create one below to begin.</p>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {departments.map((dept) => (
+                <div 
+                  key={dept.id}
+                  onClick={() => { setSelectedDeptId(dept.id); setEditMode(false); }}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                    selectedDeptId === dept.id 
+                      ? 'border-primary bg-primary/5 text-primary' 
+                      : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 text-slate-700 dark:text-slate-350'
+                  }`}
+                >
+                  <div>
+                    <p className="font-bold text-xs">{dept.name} ({dept.code})</p>
+                    {dept.description && <p className="text-[10px] text-slate-400 mt-0.5">{dept.description}</p>}
+                    {dept.manager && <p className="text-[10px] text-indigo-500 mt-0.5">Head: {dept.manager.name}</p>}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); startEdit(dept); }}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDeleteDepartment(dept.id); }}
+                      className="text-xs text-red-500 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Center & Right Column: Details / Forms */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-2">
+          {editMode ? (
+            <form onSubmit={handleUpdateDepartment} className="space-y-4">
+              <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Edit Department</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold">Department Name</label>
+                  <input 
+                    type="text" 
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold">Department Code</label>
+                  <input 
+                    type="text" 
+                    value={editCode}
+                    onChange={(e) => setEditCode(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-400 font-semibold">Description</label>
+                <textarea 
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold">Head of Department (Manager)</label>
+                  <select 
+                    value={editManagerId}
+                    onChange={(e) => setEditManagerId(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                  >
+                    <option value="">-- Select Manager --</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold">Parent Department</label>
+                  <select 
+                    value={editParentId}
+                    onChange={(e) => setEditParentId(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                  >
+                    <option value="">-- None --</option>
+                    {departments.filter(d => d.id !== selectedDeptId).map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <button 
+                  type="button"
+                  onClick={() => setEditMode(false)}
+                  className="px-4 py-2 border rounded-xl font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={updateDeptMutation.isPending}
+                  className="px-4 py-2 bg-primary text-white rounded-xl font-bold"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Form to create a department */}
+              <form onSubmit={handleCreateDepartment} className="space-y-4">
+                <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Add New Department</h3>
+                
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold">Department Name</label>
+                  <input 
+                    type="text" 
+                    value={newDeptName}
+                    onChange={(e) => setNewDeptName(e.target.value)}
+                    placeholder="e.g. Quality Assurance"
+                    required
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold">Department Code</label>
+                  <input 
+                    type="text" 
+                    value={newDeptCode}
+                    onChange={(e) => setNewDeptCode(e.target.value)}
+                    placeholder="e.g. QA"
+                    required
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold">Description</label>
+                  <textarea 
+                    value={newDeptDesc}
+                    onChange={(e) => setNewDeptDesc(e.target.value)}
+                    placeholder="Brief scope/objective of the department..."
+                    rows={2}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-semibold">Head / Manager</label>
+                    <select 
+                      value={newDeptManagerId}
+                      onChange={(e) => setNewDeptManagerId(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                    >
+                      <option value="">-- Choose Head --</option>
+                      {employees.map(emp => (
+                        <option key={emp.id} value={emp.id}>{emp.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-semibold">Parent Dept</label>
+                    <select 
+                      value={newDeptParentId}
+                      onChange={(e) => setNewDeptParentId(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                    >
+                      <option value="">-- None --</option>
+                      {departments.map(d => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={createDeptMutation.isPending}
+                  className="w-full py-2 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-1.5 hover:scale-102 transition-all shadow-md shadow-primary/20"
+                >
+                  Create Department
+                </button>
+              </form>
+
+              {/* Detail view of active/selected department */}
+              <div className="space-y-4 border-l md:pl-6 border-slate-200 dark:border-slate-800">
+                <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Department Overview</h3>
+                {activeDept ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950 border rounded-xl">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Department Name</p>
+                      <p className="font-bold text-slate-800 dark:text-white text-sm mt-0.5">{activeDept.name}</p>
+                    </div>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950 border rounded-xl">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Code</p>
+                      <p className="font-mono font-bold text-indigo-500 mt-0.5">{activeDept.code}</p>
+                    </div>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-950 border rounded-xl">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Scope Description</p>
+                      <p className="text-slate-650 dark:text-slate-350 mt-0.5">{activeDept.description || 'No description provided'}</p>
+                    </div>
+                    {activeDept.manager && (
+                      <div className="p-3 bg-slate-50 dark:bg-slate-950 border rounded-xl">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">Head of Department (HoD)</p>
+                        <p className="font-semibold text-slate-800 dark:text-white mt-0.5">{activeDept.manager.name}</p>
+                      </div>
+                    )}
+                    {activeDept.parent && (
+                      <div className="p-3 bg-slate-50 dark:bg-slate-950 border rounded-xl">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">Reporting Department (Parent)</p>
+                        <p className="font-semibold text-slate-850 dark:text-white mt-0.5">{activeDept.parent.name}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-slate-400 italic">Select a department from the registry list to see details.</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const EmployeeManagement: React.FC = () => {
   const { 
     employees, setEmployees, activeSubModule, setActiveSubModule, 
     addAuditLog, selectedEmployeeId, setSelectedEmployeeId 
   } = useApp();
+
+  const { data: deptsResponse } = useDepartments();
+  const dbDepartments = deptsResponse?.data || [];
+  const departmentOptions = dbDepartments.length > 0 
+    ? dbDepartments.map(d => d.name) 
+    : ['Engineering', 'Design', 'Product', 'Human Resources', 'Finance'];
 
   // Documents Upload Refs & State
   const documentFileInputRef = useRef<HTMLInputElement>(null);
@@ -601,6 +959,16 @@ export const EmployeeManagement: React.FC = () => {
         >
           Role & Permissions
         </button>
+        <button 
+          onClick={() => setActiveSubModule('departments')}
+          className={`py-3 px-5 text-sm font-semibold border-b-2 transition-all ${
+            activeSubModule === 'departments' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          Departments
+        </button>
       </div>
 
       {/* ======================================= */}
@@ -630,11 +998,9 @@ export const EmployeeManagement: React.FC = () => {
                   className="bg-transparent border-0 text-xs py-1.5 focus:outline-none text-slate-700 dark:text-slate-300"
                 >
                   <option value="All">All Departments</option>
-                  <option value="Engineering">Engineering</option>
-                  <option value="Design">Design</option>
-                  <option value="Product">Product</option>
-                  <option value="Human Resources">Human Resources</option>
-                  <option value="Finance">Finance</option>
+                  {departmentOptions.map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
                 </select>
               </div>
 
@@ -1211,10 +1577,9 @@ export const EmployeeManagement: React.FC = () => {
                     onChange={(e) => setNewEmp({ ...newEmp, department: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
                   >
-                    <option value="Engineering">Engineering</option>
-                    <option value="Design">Design</option>
-                    <option value="Human Resources">Human Resources</option>
-                    <option value="Finance">Finance</option>
+                    {departmentOptions.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -1671,6 +2036,13 @@ export const EmployeeManagement: React.FC = () => {
       {/* ======================================= */}
       {activeSubModule === 'roles' && (
         <RoleManagementPanel />
+      )}
+
+      {/* ======================================= */}
+      {/* 7. DEPARTMENT MANAGEMENT                */}
+      {/* ======================================= */}
+      {activeSubModule === 'departments' && (
+        <DepartmentManagementPanel />
       )}
 
     </div>
