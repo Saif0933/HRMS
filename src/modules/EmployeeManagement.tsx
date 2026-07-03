@@ -17,14 +17,412 @@ import {
   Upload,
   User
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import {
+  useAssignRole,
+  useCreatePermission,
+  useCreateRole,
+  useDeleteRole,
+  usePermissions,
+  useRoles,
+  useUpdateRole
+} from '../api/hook/useRole';
 import { Employee, useApp } from '../context/AppContext';
+
+const RoleManagementPanel: React.FC = () => {
+  const { data: rolesResponse, isLoading: rolesLoading } = useRoles();
+  const { data: permissionsResponse, isLoading: permissionsLoading } = usePermissions();
+  const { employees } = useApp();
+
+  const createRoleMutation = useCreateRole();
+  const createPermissionMutation = useCreatePermission();
+  const updateRoleMutation = useUpdateRole();
+  const deleteRoleMutation = useDeleteRole();
+  const assignRoleMutation = useAssignRole();
+
+  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleDesc, setNewRoleDesc] = useState('');
+
+  const [newPermName, setNewPermName] = useState('');
+  const [newPermAction, setNewPermAction] = useState('manage');
+  const [newPermSubject, setNewPermSubject] = useState('all');
+  const [newPermDesc, setNewPermDesc] = useState('');
+
+  const [assignUser, setAssignUser] = useState('');
+  const [assignRoleVal, setAssignRoleVal] = useState('');
+
+  const roles = rolesResponse?.data || [];
+  const permissions = permissionsResponse?.data || [];
+
+  const activeRole = roles.find(r => r.id === selectedRoleId);
+
+  const handleCreateRole = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRoleName) return;
+    createRoleMutation.mutate({
+      name: newRoleName.toUpperCase(),
+      description: newRoleDesc,
+      permissionIds: []
+    }, {
+      onSuccess: () => {
+        setNewRoleName('');
+        setNewRoleDesc('');
+        alert("Role created successfully!");
+      },
+      onError: (err) => alert(err.message)
+    });
+  };
+
+  const handleCreatePermission = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPermName || !newPermAction || !newPermSubject) return;
+    createPermissionMutation.mutate({
+      name: newPermName,
+      action: newPermAction,
+      subject: newPermSubject,
+      description: newPermDesc
+    }, {
+      onSuccess: () => {
+        setNewPermName('');
+        setNewPermDesc('');
+        alert("Permission node created successfully!");
+      },
+      onError: (err) => alert(err.message)
+    });
+  };
+
+  const handleTogglePermission = (permissionId: string) => {
+    if (!activeRole) return;
+    const currentPermissionIds = (activeRole.permissions || []).map((p: any) => p.permission?.id || p.id || p);
+    
+    let updatedIds: string[];
+    if (currentPermissionIds.includes(permissionId)) {
+      updatedIds = currentPermissionIds.filter((id: string) => id !== permissionId);
+    } else {
+      updatedIds = [...currentPermissionIds, permissionId];
+    }
+
+    updateRoleMutation.mutate({
+      id: activeRole.id,
+      data: { permissionIds: updatedIds }
+    }, {
+      onSuccess: () => {
+        alert("Permissions updated for role " + activeRole.name);
+      },
+      onError: (err) => alert(err.message)
+    });
+  };
+
+  const handleDeleteRole = (id: string) => {
+    if (confirm("Are you sure you want to delete this role?")) {
+      deleteRoleMutation.mutate(id, {
+        onSuccess: () => {
+          if (selectedRoleId === id) setSelectedRoleId(null);
+          alert("Role deleted successfully!");
+        },
+        onError: (err) => alert(err.message)
+      });
+    }
+  };
+
+  const handleAssignRole = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignUser) return;
+    const selectedEmp = employees.find(emp => emp.id === assignUser);
+    if (!selectedEmp) return;
+    const cleanPhone = selectedEmp.phone.replace(/\D/g, '');
+
+    assignRoleMutation.mutate({
+      userId: cleanPhone,
+      roleId: assignRoleVal === 'clear' ? null : assignRoleVal
+    }, {
+      onSuccess: () => {
+        alert("Role assigned to user successfully!");
+      },
+      onError: (err) => alert(err.message)
+    });
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in text-xs">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Left Column: Roles list & Creation */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+          <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Roles & Authorization Profiles</h3>
+          {rolesLoading ? (
+            <p className="text-slate-405">Loading roles list...</p>
+          ) : roles.length === 0 ? (
+            <p className="text-slate-405">No admin-defined roles found. Create one below to begin.</p>
+          ) : (
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {roles.map((role) => (
+                <div 
+                  key={role.id}
+                  onClick={() => setSelectedRoleId(role.id)}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                    selectedRoleId === role.id 
+                      ? 'border-primary bg-primary/5 text-primary' 
+                      : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950/40 text-slate-700 dark:text-slate-350'
+                  }`}
+                >
+                  <div>
+                    <p className="font-bold text-xs">{role.name}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{role.description || 'No description'}</p>
+                  </div>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleDeleteRole(role.id); }}
+                    className="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={handleCreateRole} className="border-t pt-4 space-y-3">
+            <h4 className="font-bold text-slate-700 dark:text-white text-xs">Create New Role</h4>
+            <div className="space-y-1">
+              <label className="text-slate-400 font-semibold">Role Code / Name</label>
+              <input 
+                type="text" 
+                value={newRoleName}
+                onChange={(e) => setNewRoleName(e.target.value)}
+                placeholder="e.g. HR_GENERALIST"
+                required
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-slate-400 font-semibold">Role Description</label>
+              <textarea 
+                value={newRoleDesc}
+                onChange={(e) => setNewRoleDesc(e.target.value)}
+                placeholder="Brief description of the role access scope..."
+                rows={2}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+              />
+            </div>
+            <button 
+              type="submit"
+              disabled={createRoleMutation.isPending}
+              className="w-full py-2 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-1.5 hover:scale-102 transition-all shadow-md shadow-primary/20"
+            >
+              Add Role Profile
+            </button>
+          </form>
+        </div>
+
+        {/* Center/Right Column: Role Details & Permissions */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-2">
+          <div className="flex items-center justify-between border-b pb-2">
+            <h3 className="font-bold text-slate-800 dark:text-white text-sm">Role Access Rights & Node Permissions</h3>
+            {activeRole && (
+              <span className="bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold">
+                {activeRole.name}
+              </span>
+            )}
+          </div>
+
+          {!activeRole ? (
+            <div className="h-full flex items-center justify-center py-10 text-slate-400">
+              Select a role from the left panel to assign permission nodes.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Permission Assignment Checklist */}
+              <div className="space-y-3">
+                <h4 className="font-bold text-slate-700 dark:text-white text-xs">Assigned Permissions</h4>
+                {permissionsLoading ? (
+                  <p className="text-slate-400">Loading permission nodes...</p>
+                ) : permissions.length === 0 ? (
+                  <p className="text-slate-405">No system permissions found. Define one in the creation panel.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-96 overflow-y-auto border p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950">
+                    {permissions.map((perm) => {
+                      const isAssigned = (activeRole.permissions || []).some(
+                        (p: any) => (p.permission?.id || p.id || p) === perm.id
+                      );
+                      return (
+                        <label key={perm.id} className="flex items-start gap-2.5 p-1 cursor-pointer select-none">
+                          <input 
+                            type="checkbox"
+                            checked={isAssigned}
+                            onChange={() => handleTogglePermission(perm.id)}
+                            className="rounded text-primary focus:ring-0 mt-0.5"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-700 dark:text-slate-350">{perm.name}</span>
+                            <span className="block text-[9px] text-slate-400">
+                              Action: <span className="font-mono text-primary">{perm.action}</span> | Subject: <span className="font-mono text-indigo-500">{perm.subject}</span>
+                            </span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Permission Creator Form */}
+              <form onSubmit={handleCreatePermission} className="space-y-3 border-l md:pl-6 border-slate-200 dark:border-slate-800">
+                <h4 className="font-bold text-slate-700 dark:text-white text-xs">Register System Permission Node</h4>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold">Permission Name</label>
+                  <input 
+                    type="text" 
+                    value={newPermName}
+                    onChange={(e) => setNewPermName(e.target.value)}
+                    placeholder="e.g. Approve Leave Applications"
+                    required
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-semibold">Action</label>
+                    <select 
+                      value={newPermAction}
+                      onChange={(e) => setNewPermAction(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                    >
+                      <option value="read">read</option>
+                      <option value="write">write</option>
+                      <option value="create">create</option>
+                      <option value="delete">delete</option>
+                      <option value="manage">manage</option>
+                      <option value="approve">approve</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-semibold">Subject / Module</label>
+                    <input 
+                      type="text" 
+                      value={newPermSubject}
+                      onChange={(e) => setNewPermSubject(e.target.value)}
+                      placeholder="e.g. leaves"
+                      required
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold">Description</label>
+                  <textarea 
+                    value={newPermDesc}
+                    onChange={(e) => setNewPermDesc(e.target.value)}
+                    placeholder="Permission description..."
+                    rows={2}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  disabled={createPermissionMutation.isPending}
+                  className="w-full py-2 bg-indigo-600 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 hover:scale-102 transition-all shadow-md shadow-indigo-600/20"
+                >
+                  Create Node
+                </button>
+              </form>
+
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* User Role Assignment Section */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+        <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Assign Role Profiles to Users</h3>
+        <form onSubmit={handleAssignRole} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div className="space-y-1">
+            <label className="text-slate-400 font-semibold block mb-1">Select Employee</label>
+            <select
+              value={assignUser}
+              onChange={(e) => setAssignUser(e.target.value)}
+              required
+              className="w-full px-3 py-2.5 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+            >
+              <option value="">-- Choose Employee --</option>
+              {employees.map(emp => (
+                <option key={emp.id} value={emp.id}>{emp.name} ({emp.role} - {emp.department})</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-slate-400 font-semibold block mb-1">Assign Role Profile</label>
+            <select
+              value={assignRoleVal}
+              onChange={(e) => setAssignRoleVal(e.target.value)}
+              required
+              className="w-full px-3 py-2.5 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300"
+            >
+              <option value="">-- Select Role --</option>
+              <option value="clear">-- None (Clear Role) --</option>
+              {roles.map(role => (
+                <option key={role.id} value={role.id}>{role.name}</option>
+              ))}
+            </select>
+          </div>
+          <button 
+            type="submit"
+            disabled={assignRoleMutation.isPending}
+            className="w-full py-2.5 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-1.5 hover:scale-102 transition-all shadow-md shadow-primary/20"
+          >
+            Update Role Assignment
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 export const EmployeeManagement: React.FC = () => {
   const { 
     employees, setEmployees, activeSubModule, setActiveSubModule, 
     addAuditLog, selectedEmployeeId, setSelectedEmployeeId 
   } = useApp();
+
+  // Documents Upload Refs & State
+  const documentFileInputRef = useRef<HTMLInputElement>(null);
+  const bulkFileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedDocs, setUploadedDocs] = useState<{ [empId: string]: { name: string; size: string; date: string }[] }>({
+    'EMP001': [
+      { name: "Experience_Letter.pdf", size: "340 KB", date: "2026-05-10" },
+      { name: "Educational_Degree.pdf", size: "1.2 MB", date: "2026-05-11" }
+    ]
+  });
+
+  const handleDocumentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const sizeStr = file.size > 1024 * 1024 
+        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+        : `${Math.round(file.size / 1024)} KB`;
+      const newDoc = {
+        name: file.name,
+        size: sizeStr,
+        date: new Date().toISOString().split('T')[0]
+      };
+      setUploadedDocs(prev => ({
+        ...prev,
+        [activeEmployee.id]: [newDoc, ...(prev[activeEmployee.id] || [])]
+      }));
+      addAuditLog("Uploaded Document", "Employee Center", `Uploaded document "${file.name}" for employee ${activeEmployee.name}`);
+      alert(`Document "${file.name}" uploaded successfully!`);
+    }
+  };
+
+  const handleBulkFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      addAuditLog("Bulk Import File Selected", "Employee Center", `Selected bulk import file: ${file.name}`);
+      alert(`File "${file.name}" selected successfully! Click 'Process Upload' to sync records.`);
+    }
+  };
 
   // Component state
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -192,6 +590,16 @@ export const EmployeeManagement: React.FC = () => {
           }`}
         >
           Bulk Actions & Mailing
+        </button>
+        <button 
+          onClick={() => setActiveSubModule('roles')}
+          className={`py-3 px-5 text-sm font-semibold border-b-2 transition-all ${
+            activeSubModule === 'roles' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          Role & Permissions
         </button>
       </div>
 
@@ -479,13 +887,21 @@ export const EmployeeManagement: React.FC = () => {
               <div className="space-y-4 text-xs">
                 <div className="flex items-center justify-between border-b pb-2">
                   <h3 className="text-sm font-bold text-slate-800 dark:text-white">Identity Documents & Verification</h3>
-                  <button 
-                    onClick={() => alert("Simulating upload dialog...")}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-primary hover:text-white transition-all font-semibold"
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                    Upload File
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="file" 
+                      ref={documentFileInputRef} 
+                      className="hidden" 
+                      onChange={handleDocumentFileChange}
+                    />
+                    <button 
+                      onClick={() => documentFileInputRef.current?.click()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl hover:scale-105 transition-all font-semibold shadow-sm"
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Upload File
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -509,6 +925,20 @@ export const EmployeeManagement: React.FC = () => {
                     </div>
                     <span className="bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300 px-2 py-0.5 rounded-full text-[9px] font-bold">VERIFIED</span>
                   </div>
+
+                  {/* Uploaded Documents */}
+                  {(uploadedDocs[activeEmployee.id] || []).map((doc, idx) => (
+                    <div key={idx} className="p-3 border rounded-xl flex items-center justify-between animate-fade-in col-span-1">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-8 w-8 text-primary" />
+                        <div>
+                          <p className="font-bold text-slate-850 dark:text-white">{doc.name}</p>
+                          <p className="text-[10px] text-slate-400">Size: {doc.size} • Uploaded: {doc.date}</p>
+                        </div>
+                      </div>
+                      <span className="bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 px-2 py-0.5 rounded-full text-[9px] font-bold">UPLOADED</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -1131,12 +1561,20 @@ export const EmployeeManagement: React.FC = () => {
           {/* Left Column: Upload and File import */}
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-1">
             <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Bulk Excel/CSV Import</h3>
+            <input 
+              type="file" 
+              ref={bulkFileInputRef} 
+              className="hidden" 
+              accept=".csv,.xlsx,.xls"
+              onChange={handleBulkFileChange}
+            />
             <div 
               onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
               onDragLeave={() => setDragActive(false)}
               onDrop={(e) => { e.preventDefault(); setDragActive(false); alert("File dropped! Parsing data structure..."); }}
+              onClick={() => bulkFileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                dragActive ? 'border-primary bg-primary/5' : 'border-slate-200 dark:border-slate-800'
+                dragActive ? 'border-primary bg-primary/5' : 'border-slate-200 dark:border-slate-800 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-950/40'
               }`}
             >
               <Upload className="h-8 w-8 text-slate-400 mx-auto mb-2" />
@@ -1226,6 +1664,13 @@ export const EmployeeManagement: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* ======================================= */}
+      {/* 5. ROLE & PERMISSION MANAGEMENT         */}
+      {/* ======================================= */}
+      {activeSubModule === 'roles' && (
+        <RoleManagementPanel />
       )}
 
     </div>

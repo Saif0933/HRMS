@@ -29,7 +29,8 @@ export const Sidebar: React.FC = () => {
         { id: 'master', label: 'Employee Master' },
         { id: 'orgchart', label: 'Organization Chart' },
         { id: 'exit', label: 'Exit & Settlement' },
-        { id: 'bulk', label: 'Bulk Imports & Exports' }
+        { id: 'bulk', label: 'Bulk Imports & Exports' },
+        { id: 'roles', label: 'Role & Permissions' }
       ]
     },
     { 

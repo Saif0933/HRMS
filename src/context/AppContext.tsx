@@ -1,10 +1,20 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  Employee, LeaveRequest, ClaimRequest, HelpTicket, FeedPost, Asset,
-  initialEmployees, initialLeaveRequests, initialClaims, initialTickets, initialFeedPosts, initialAssets 
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import {
+    Asset,
+    ClaimRequest,
+    Employee,
+    FeedPost,
+    HelpTicket,
+    initialAssets,
+    initialClaims,
+    initialEmployees,
+    initialFeedPosts,
+    initialLeaveRequests,
+    initialTickets,
+    LeaveRequest
 } from '../mockData';
 
-export type { Employee, LeaveRequest, ClaimRequest, HelpTicket, FeedPost, Asset };
+export type { Asset, ClaimRequest, Employee, FeedPost, HelpTicket, LeaveRequest };
 
 export type UserRole = 'Super Admin' | 'HR Admin' | 'Manager' | 'Employee';
 

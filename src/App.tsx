@@ -3,6 +3,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
 import { Chatbot } from './components/Chatbot';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Modules imports
 import { Dashboard } from './modules/Dashboard';
@@ -55,11 +56,16 @@ const MainLayout: React.FC = () => {
   );
 };
 
+// Create QueryClient instance
+const queryClient = new QueryClient();
+
 export const App: React.FC = () => {
   return (
-    <AppProvider>
-      <MainLayout />
-    </AppProvider>
+    <QueryClientProvider client={queryClient}>
+      <AppProvider>
+        <MainLayout />
+      </AppProvider>
+    </QueryClientProvider>
   );
 };
 

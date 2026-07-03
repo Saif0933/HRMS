@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Phone, Lock, Landmark, ArrowRight, ShieldCheck, Sparkles, RefreshCw, AlertCircle, Eye, Moon, Sun } from 'lucide-react';
+import { useSendOtp, useVerifyOtp } from '../api/hook/useAuth';
 
 export const Login: React.FC = () => {
   const { 
@@ -14,14 +15,20 @@ export const Login: React.FC = () => {
 
   const [phoneNumber, setPhoneNumber] = useState('');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
-  const [otp, setOtp] = useState<string[]>(Array(6).fill(''));
-  const [loading, setLoading] = useState(false);
+  const [otp, setOtp] = useState<string[]>(Array(4).fill(''));
   const [error, setError] = useState('');
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
-  const [generatedOtp, setGeneratedOtp] = useState('123456');
+  const [generatedOtp, setGeneratedOtp] = useState('1234');
+  const [localLoading, setLocalLoading] = useState(false);
 
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // TanStack Query Hooks
+  const sendOtpMutation = useSendOtp();
+  const verifyOtpMutation = useVerifyOtp();
+
+  const loading = sendOtpMutation.isPending || verifyOtpMutation.isPending || localLoading;
 
   // Filter out a few interesting employees for quick-login shortcuts
   const demoUsers = [
@@ -76,36 +83,28 @@ export const Login: React.FC = () => {
     e.preventDefault();
     setError('');
 
-    // Basic 10 digit check
     const digitsOnly = phoneNumber.replace(/\D/g, '');
     if (digitsOnly.length !== 10) {
       setError('Please enter a valid 10-digit phone number.');
       return;
     }
 
-    // Verify if phone exists in mock data
-    const matchedEmployee = employees.find(emp => {
-      const cleanEmpPhone = emp.phone.replace(/\D/g, '');
-      return cleanEmpPhone.endsWith(digitsOnly);
-    });
-
-    if (!matchedEmployee) {
-      setError('This phone number is not registered in our HRMS database. Try one of the quick demo logins below!');
-      return;
-    }
-
-    setLoading(true);
-
-    // Simulate sending OTP
-    setTimeout(() => {
-      setLoading(false);
-      setStep('otp');
-      setTimer(30);
-      setCanResend(false);
-      // Auto-generate a random 6 digit code for showcase
-      const randomOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedOtp(randomOtp);
-    }, 1200);
+    sendOtpMutation.mutate(
+      { phone: digitsOnly },
+      {
+        onSuccess: (response) => {
+          setStep('otp');
+          setTimer(30);
+          setCanResend(false);
+          if (response.data?.otp) {
+            setGeneratedOtp(response.data.otp);
+          }
+        },
+        onError: (err: any) => {
+          setError(err.message || 'Failed to send OTP. Please try again.');
+        },
+      }
+    );
   };
 
   const handleOtpChange = (value: string, index: number) => {
@@ -115,7 +114,7 @@ export const Login: React.FC = () => {
     setOtp(newOtp);
 
     // Move to next box if typed
-    if (value && index < 5) {
+    if (value && index < 3) {
       otpRefs.current[index + 1]?.focus();
     }
   };
@@ -131,44 +130,62 @@ export const Login: React.FC = () => {
     setError('');
     const otpCode = otp.join('');
 
-    if (otpCode.length !== 6) {
-      setError('Please enter the full 6-digit verification code.');
+    if (otpCode.length !== 4) {
+      setError('Please enter the full 4-digit verification code.');
       return;
     }
 
-    if (otpCode !== generatedOtp && otpCode !== '123456') { // Allow '123456' as back door always
-      setError('Invalid OTP code. Please check the code shown in the banner.');
-      return;
-    }
+    const digitsOnly = phoneNumber.replace(/\D/g, '');
+    verifyOtpMutation.mutate(
+      { phone: digitsOnly, otp: otpCode },
+      {
+        onSuccess: (response) => {
+          const loggedUser = response.data?.user;
+          if (loggedUser) {
+            // Find corresponding employee from mock lists/state, or create one:
+            const matchedEmployee = employees.find(emp => {
+              const cleanEmpPhone = emp.phone.replace(/\D/g, '');
+              return cleanEmpPhone.endsWith(digitsOnly);
+            }) || {
+              id: loggedUser.id,
+              name: loggedUser.name || 'New Employee',
+              email: loggedUser.email || '',
+              phone: loggedUser.phone,
+              role: 'Employee',
+              department: 'Engineering',
+              avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120',
+              status: 'Active' as const,
+              joiningDate: new Date().toISOString().split('T')[0],
+              location: 'Mumbai',
+              manager: 'Neha Patel',
+              basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
+              bankName: '', bankAccount: '', ifsc: '', pan: '', aadhaar: '', uan: '', pfNumber: '',
+              gender: 'Male', dob: '1995-01-01', bloodGroup: 'O+', maritalStatus: 'Single',
+              qualification: '', university: '', passingYear: '', pastCompanies: [],
+              promotions: [], transfers: [], assets: [],
+              probationDuration: '6 Months', probationEnd: '', confirmationStatus: 'Confirmed' as const
+            };
 
-    setLoading(true);
+            // Map user role
+            let role: 'Super Admin' | 'HR Admin' | 'Manager' | 'Employee' = 'Employee';
+            if (loggedUser.name === 'Vikram Malhotra') {
+              role = 'Super Admin';
+            } else if (loggedUser.name === 'Karan Johar' || loggedUser.name === 'Shalini Sen') {
+              role = 'HR Admin';
+            }
 
-    setTimeout(() => {
-      // Find the employee by phone
-      const digitsOnly = phoneNumber.replace(/\D/g, '');
-      const matchedEmployee = employees.find(emp => {
-        const cleanEmpPhone = emp.phone.replace(/\D/g, '');
-        return cleanEmpPhone.endsWith(digitsOnly);
-      });
-
-      if (matchedEmployee) {
-        let role: 'Super Admin' | 'HR Admin' | 'Manager' | 'Employee' = 'Employee';
-        if (matchedEmployee.name === 'Vikram Malhotra' || matchedEmployee.role === 'Chief Executive Officer') {
-          role = 'Super Admin';
-        } else if (matchedEmployee.name === 'Karan Johar' || matchedEmployee.name === 'Shalini Sen' || matchedEmployee.department === 'Human Resources') {
-          role = 'HR Admin';
-        } else if (matchedEmployee.name === 'Neha Patel' || matchedEmployee.role.includes('Manager')) {
-          role = 'Manager';
-        }
-
-        setCurrentUser(matchedEmployee);
-        setUserRole(role);
-        setIsAuthenticated(true);
-      } else {
-        setError('Verification failed. Unable to fetch employee record.');
+            setCurrentUser(matchedEmployee as any);
+            setUserRole(role);
+            setIsAuthenticated(true);
+          } else {
+            setError('Verification failed. Unable to fetch user details.');
+          }
+        },
+        onError: (err: any) => {
+          setError(err.message || 'Invalid OTP code. Please try again.');
+        },
       }
-      setLoading(false);
-    }, 1000);
+    );
   };
 
   const selectDemoUser = (user: typeof demoUsers[0]) => {
@@ -176,25 +193,38 @@ export const Login: React.FC = () => {
     setError('');
     setStep('phone');
     // Automate login process
-    setLoading(true);
+    setLocalLoading(true);
     setTimeout(() => {
-      setLoading(false);
+      setLocalLoading(false);
       setPhoneNumber(user.phone);
       setStep('otp');
       setTimer(30);
       setCanResend(false);
-      setGeneratedOtp('123456'); // Fixed OTP for demo logins
-      setOtp(['1', '2', '3', '4', '5', '6']);
+      setGeneratedOtp('1234'); // Fixed OTP for demo logins
+      setOtp(['1', '2', '3', '4']);
     }, 600);
   };
 
   const resendOtp = () => {
-    setTimer(30);
-    setCanResend(false);
-    const randomOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(randomOtp);
-    setOtp(Array(6).fill(''));
-    otpRefs.current[0]?.focus();
+    setError('');
+    const digitsOnly = phoneNumber.replace(/\D/g, '');
+    sendOtpMutation.mutate(
+      { phone: digitsOnly },
+      {
+        onSuccess: (response) => {
+          setTimer(30);
+          setCanResend(false);
+          setOtp(Array(6).fill(''));
+          otpRefs.current[0]?.focus();
+          if (response.data?.otp) {
+            setGeneratedOtp(response.data.otp);
+          }
+        },
+        onError: (err: any) => {
+          setError(err.message || 'Failed to resend OTP. Please try again.');
+        },
+      }
+    );
   };
 
   return (
@@ -273,7 +303,7 @@ export const Login: React.FC = () => {
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   {step === 'phone' 
                     ? 'Enter your mobile number to receive a verification OTP' 
-                    : `We sent a 6-digit OTP code to +91 ${phoneNumber}`}
+                    : `We sent a 4-digit OTP code to +91 ${phoneNumber}`}
                 </p>
               </div>
 
@@ -350,7 +380,7 @@ export const Login: React.FC = () => {
                 <form onSubmit={handleOtpSubmit} className="space-y-5">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
-                      6-Digit Security Code
+                      4-Digit Security Code
                     </label>
                     <div className="flex gap-2 justify-between">
                       {otp.map((digit, idx) => (
@@ -376,7 +406,7 @@ export const Login: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setStep('phone');
-                        setOtp(Array(6).fill(''));
+                        setOtp(Array(4).fill(''));
                         setError('');
                       }}
                       className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-semibold hover:underline"
@@ -401,7 +431,7 @@ export const Login: React.FC = () => {
 
                   <button
                     type="submit"
-                    disabled={loading || otp.join('').length !== 6}
+                    disabled={loading || otp.join('').length !== 4}
                     className="w-full bg-primary hover:bg-primary/95 text-white py-3 px-4 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 hover:shadow-primary/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none hover:translate-y-[-1px] active:translate-y-[0px]"
                     id="verify-otp-btn"
                   >
