@@ -7,6 +7,7 @@ export interface User {
   name: string;
   email: string | null;
   phone: string;
+  role?: string;
 }
 
 export interface BaseResponse<T> {

@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { 
   LayoutDashboard, Users, Clock, CalendarDays, Wallet, Award, 
   Heart, Plane, Briefcase, FileText, Laptop, MailOpen, 
-  HelpCircle, ChevronDown, ChevronRight, Menu, X, Landmark, ClipboardList
+  HelpCircle, ChevronDown, ChevronRight, Landmark, ClipboardList
 } from 'lucide-react';
 
 interface MenuItem {

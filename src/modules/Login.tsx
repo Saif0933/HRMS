@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useApp } from '../context/AppContext';
-import { Phone, Lock, Landmark, ArrowRight, ShieldCheck, Sparkles, RefreshCw, AlertCircle, Eye, Moon, Sun } from 'lucide-react';
+import { AlertCircle, ArrowRight, Landmark, Moon, Phone, RefreshCw, ShieldCheck, Sparkles, Sun } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSendOtp, useVerifyOtp } from '../api/hook/useAuth';
+import { useApp } from '../context/AppContext';
 
 export const Login: React.FC = () => {
   const { 
@@ -142,6 +142,17 @@ export const Login: React.FC = () => {
         onSuccess: (response) => {
           const loggedUser = response.data?.user;
           if (loggedUser) {
+            // Map user role using the database role
+            let role: 'Super Admin' | 'HR Admin' | 'Manager' | 'Employee' = 'Employee';
+            const dbRole = loggedUser.role;
+            if (dbRole === 'SUPER_ADMIN' || dbRole === 'SUPER ADMIN' || loggedUser.name === 'Vikram Malhotra') {
+              role = 'Super Admin';
+            } else if (dbRole === 'HR_ADMIN' || dbRole === 'HR ADMIN' || loggedUser.name === 'Karan Johar' || loggedUser.name === 'Shalini Sen') {
+              role = 'HR Admin';
+            } else if (dbRole === 'MANAGER' || dbRole === 'Manager') {
+              role = 'Manager';
+            }
+
             // Find corresponding employee from mock lists/state, or create one:
             const matchedEmployee = employees.find(emp => {
               const cleanEmpPhone = emp.phone.replace(/\D/g, '');
@@ -151,7 +162,7 @@ export const Login: React.FC = () => {
               name: loggedUser.name || 'New Employee',
               email: loggedUser.email || '',
               phone: loggedUser.phone,
-              role: 'Employee',
+              role: role,
               department: 'Engineering',
               avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120',
               status: 'Active' as const,
@@ -165,14 +176,6 @@ export const Login: React.FC = () => {
               promotions: [], transfers: [], assets: [],
               probationDuration: '6 Months', probationEnd: '', confirmationStatus: 'Confirmed' as const
             };
-
-            // Map user role
-            let role: 'Super Admin' | 'HR Admin' | 'Manager' | 'Employee' = 'Employee';
-            if (loggedUser.name === 'Vikram Malhotra') {
-              role = 'Super Admin';
-            } else if (loggedUser.name === 'Karan Johar' || loggedUser.name === 'Shalini Sen') {
-              role = 'HR Admin';
-            }
 
             setCurrentUser(matchedEmployee as any);
             setUserRole(role);
@@ -191,18 +194,26 @@ export const Login: React.FC = () => {
   const selectDemoUser = (user: typeof demoUsers[0]) => {
     setPhoneNumber(user.phone);
     setError('');
-    setStep('phone');
-    // Automate login process
     setLocalLoading(true);
-    setTimeout(() => {
-      setLocalLoading(false);
-      setPhoneNumber(user.phone);
-      setStep('otp');
-      setTimer(30);
-      setCanResend(false);
-      setGeneratedOtp('1234'); // Fixed OTP for demo logins
-      setOtp(['1', '2', '3', '4']);
-    }, 600);
+
+    sendOtpMutation.mutate(
+      { phone: user.phone },
+      {
+        onSuccess: (response) => {
+          setLocalLoading(false);
+          setStep('otp');
+          setTimer(30);
+          setCanResend(false);
+          const backendOtp = response.data?.otp || '1234';
+          setGeneratedOtp(backendOtp);
+          setOtp(backendOtp.split(''));
+        },
+        onError: (err: any) => {
+          setLocalLoading(false);
+          setError(err.message || 'Failed to initialize demo login.');
+        },
+      }
+    );
   };
 
   const resendOtp = () => {

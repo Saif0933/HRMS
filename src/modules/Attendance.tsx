@@ -2,13 +2,15 @@ import {
   Camera,
   Check,
   Clock,
+  Download,
   FileText,
-  X,
-  Search,
   Filter,
-  Download
+  Lock,
+  Search,
+  X
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import Webcam from 'react-webcam';
 import { useApp } from '../context/AppContext';
 
 interface RegularizationRequest {
@@ -33,6 +35,22 @@ export const Attendance: React.FC = () => {
     { time: "Yesterday, 09:34 AM", type: "In", method: "Biometric Portal" },
     { time: "Yesterday, 06:31 PM", type: "Out", method: "Biometric Portal" }
   ]);
+
+  // Camera & Selfie Stream States using react-webcam
+  const webcamRef = useRef<Webcam | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [verifyMethod, setVerifyMethod] = useState<'selfie' | 'password'>('selfie');
+  const [isVerifyingLock, setIsVerifyingLock] = useState(false);
+
+  const capturePhoto = () => {
+    if (webcamRef.current) {
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (imageSrc) {
+        setSelfiePreview(imageSrc);
+      }
+      setIsCameraActive(false);
+    }
+  };
 
   // Regularization requests
   const [regularizeRequests, setRegularizeRequests] = useState<RegularizationRequest[]>([
@@ -72,18 +90,85 @@ export const Attendance: React.FC = () => {
     return { dayNum, status };
   });
 
-  const handlePunchSubmit = () => {
+  const verifyWithScreenLock = async (): Promise<boolean> => {
+    try {
+      if (!window.PublicKeyCredential) {
+        alert("WebAuthn is not supported on this browser.");
+        return false;
+      }
+      
+      const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      if (!available) {
+        alert("Desktop Lock Screen verification (Windows Hello) is not available or enabled on this device.");
+        return false;
+      }
+
+      // Generate random challenge and user id
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+      const userId = new Uint8Array(16);
+      window.crypto.getRandomValues(userId);
+
+      // Trigger native platform lock screen prompt
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge,
+          rp: { name: "Symbosys HRMS Portal" },
+          user: {
+            id: userId,
+            name: "employee",
+            displayName: "Employee"
+          },
+          pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+          authenticatorSelection: {
+            authenticatorAttachment: "platform",
+            userVerification: "required"
+          },
+          timeout: 60000
+        }
+      });
+
+      return !!credential;
+    } catch (err: any) {
+      console.error("Lock screen verification failed:", err);
+      alert("Verification failed: " + (err.message || "User cancelled lock screen prompt."));
+      return false;
+    }
+  };
+
+  const executePunch = () => {
     const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ", Today";
-    setPunchLog(prev => [{ time: timeString, type: punchType, method: selfiePreview ? "GPS + Selfie" : "GPS Mobile" }, ...prev]);
+    const methodStr = verifyMethod === 'selfie' ? "GPS + Selfie" : "GPS + Password";
+    setPunchLog(prev => [{ time: timeString, type: punchType, method: methodStr }, ...prev]);
     
     addAuditLog(
       `Attendance Punch ${punchType}`, 
       "Attendance Module", 
-      `Self punch ${punchType} verified via GPS coordinates (Distance: ${distance}m) and liveliness face validation.`
+      `Self punch ${punchType} verified via GPS coordinates (Distance: ${distance}m) and ${verifyMethod === 'selfie' ? 'liveliness face validation' : 'password authentication'}.`
     );
 
     alert(`Punch ${punchType} recorded successfully at ${timeString}!`);
+    setIsCameraActive(false);
     setSelfiePreview(null);
+  };
+
+  const handlePunchSubmit = async () => {
+    if (verifyMethod === 'selfie' && !selfiePreview) {
+      alert('Please capture a selfie before verifying punch.');
+      return;
+    }
+    
+    if (verifyMethod === 'password') {
+      setIsVerifyingLock(true);
+      const isVerified = await verifyWithScreenLock();
+      setIsVerifyingLock(false);
+      
+      if (isVerified) {
+        executePunch();
+      }
+    } else {
+      executePunch();
+    }
   };
 
   const handleApplyRegularization = (e: React.FormEvent) => {
@@ -198,32 +283,100 @@ export const Attendance: React.FC = () => {
               </button>
             </div>
 
-            {/* Selfie Verification */}
-            <div className="space-y-2">
-              <span className="text-slate-400 font-bold block">Biometric Liveliness Face Detection</span>
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-center bg-slate-50 dark:bg-slate-950 relative overflow-hidden h-40 flex flex-col justify-center items-center">
-                {selfiePreview ? (
-                  <>
-                    <img src={selfiePreview} alt="Selfie Verification" className="absolute inset-0 w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                      <span className="text-green-400 font-bold bg-black/60 px-3 py-1 rounded-full flex items-center gap-1.5">
-                        <Check className="h-4 w-4" />
-                        Face Confirmed
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <Camera className="h-8 w-8 text-slate-400 mb-2 animate-bounce" />
-                    <button 
-                      onClick={() => setSelfiePreview("https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120")}
-                      className="px-3 py-1.5 bg-primary text-white rounded-lg font-bold"
-                    >
-                      Capture Mock Selfie
-                    </button>
-                  </>
-                )}
+            {/* Verification Method Selector */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-bold block">Verification Method</span>
               </div>
+              <div className="flex bg-slate-100 dark:bg-slate-950 rounded-lg p-0.5 border text-[10px]">
+                <button 
+                  type="button"
+                  onClick={() => setVerifyMethod('selfie')}
+                  className={`w-1/2 py-1.5 rounded font-bold transition-all ${
+                    verifyMethod === 'selfie' ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500'
+                  }`}
+                >
+                  Selfie Camera
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setVerifyMethod('password')}
+                  className={`w-1/2 py-1.5 rounded font-bold transition-all ${
+                    verifyMethod === 'password' ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500'
+                  }`}
+                >
+                  Password Auth
+                </button>
+              </div>
+
+              {verifyMethod === 'selfie' ? (
+                <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-center bg-slate-50 dark:bg-slate-950 relative overflow-hidden h-40 flex flex-col justify-center items-center">
+                  {selfiePreview ? (
+                    <>
+                      <img src={selfiePreview} alt="Selfie Verification" className="absolute inset-0 w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <span className="text-green-400 font-bold bg-black/60 px-3 py-1 rounded-full flex items-center gap-1.5">
+                          <Check className="h-4 w-4" />
+                          Face Confirmed
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelfiePreview(null);
+                          setIsCameraActive(false);
+                        }}
+                        className="absolute top-2 right-2 bg-black/60 text-white p-1 rounded-full hover:bg-black/95 transition-all z-10"
+                        type="button"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </>
+                  ) : isCameraActive ? (
+                    <>
+                      <Webcam
+                        audio={false}
+                        ref={webcamRef}
+                        screenshotFormat="image/jpeg"
+                        className="absolute inset-0 w-full h-full object-cover"
+                        style={{ transform: 'scaleX(-1)' }}
+                        videoConstraints={{
+                          facingMode: "user"
+                        }}
+                      />
+                      <div className="absolute bottom-2 inset-x-0 flex justify-center z-10">
+                        <button 
+                          onClick={capturePhoto}
+                          className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold shadow-md text-[10px]"
+                          type="button"
+                        >
+                          Capture Photo
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="h-8 w-8 text-slate-400 mb-2 animate-bounce" />
+                      <button 
+                        onClick={() => setIsCameraActive(true)}
+                        className="px-3 py-1.5 bg-primary text-white rounded-lg font-bold"
+                        type="button"
+                      >
+                        Capture Mock Selfie
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50 dark:bg-slate-950 relative h-40 flex flex-col justify-center items-center text-center space-y-3">
+                  <div className="p-2.5 bg-primary/10 rounded-full text-primary">
+                    <Lock className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-slate-850 dark:text-white block text-xs">Verify Desktop Screen Lock</span>
+                    <span className="text-[10px] text-slate-400 block max-w-[220px] mt-1">Requires your OS lock screen PIN or password authentication to verify GPS punch.</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Geofence Status */}
@@ -247,11 +400,13 @@ export const Attendance: React.FC = () => {
 
             <button 
               onClick={handlePunchSubmit}
+              disabled={isVerifyingLock}
               className={`w-full py-3 rounded-xl font-bold shadow-lg transition-all ${
+                isVerifyingLock ? 'bg-slate-400 cursor-not-allowed text-white shadow-none' :
                 punchType === 'In' ? 'bg-primary text-white shadow-primary/10' : 'bg-rose-500 text-white shadow-rose-500/10'
               }`}
             >
-              Verify Punch & Sync
+              {isVerifyingLock ? 'Verifying Lock Screen...' : 'Verify Punch & Sync'}
             </button>
           </div>
 
