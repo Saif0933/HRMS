@@ -35,11 +35,24 @@ import {
   useDeleteDepartment,
   Department
 } from '../api/hook/useDepartment';
+import {
+  useEmployees,
+  useCreateEmployee,
+  useUpdateEmployee,
+  useDeleteEmployee,
+  useEmployeeSalary,
+  useUpdateEmployeeSalary,
+  useEmployeePersonal,
+  useUpdateEmployeePersonal
+} from '../api/hook/useEmployee';
 
-const RoleManagementPanel: React.FC = () => {
+interface RoleManagementPanelProps {
+  employees: Employee[];
+}
+
+const RoleManagementPanel: React.FC<RoleManagementPanelProps> = ({ employees }) => {
   const { data: rolesResponse, isLoading: rolesLoading } = useRoles();
   const { data: permissionsResponse, isLoading: permissionsLoading } = usePermissions();
-  const { employees } = useApp();
 
   const createRoleMutation = useCreateRole();
   const createPermissionMutation = useCreatePermission();
@@ -138,10 +151,15 @@ const RoleManagementPanel: React.FC = () => {
     if (!assignUser) return;
     const selectedEmp = employees.find(emp => emp.id === assignUser);
     if (!selectedEmp) return;
-    const cleanPhone = selectedEmp.phone.replace(/\D/g, '');
+    
+    const userIdentifier = selectedEmp.userId || selectedEmp.email || selectedEmp.phone;
+    if (!userIdentifier) {
+      alert("This employee does not have a user ID, email, or phone to identify their user account.");
+      return;
+    }
 
     assignRoleMutation.mutate({
-      userId: cleanPhone,
+      userId: userIdentifier,
       roleId: assignRoleVal === 'clear' ? null : assignRoleVal
     }, {
       onSuccess: () => {
@@ -387,9 +405,12 @@ const RoleManagementPanel: React.FC = () => {
   );
 };
 
-const DepartmentManagementPanel: React.FC = () => {
+interface DepartmentManagementPanelProps {
+  employees: Employee[];
+}
+
+const DepartmentManagementPanel: React.FC<DepartmentManagementPanelProps> = ({ employees }) => {
   const { data: deptsResponse, isLoading: deptsLoading } = useDepartments();
-  const { employees } = useApp();
 
   const createDeptMutation = useCreateDepartment();
   const updateDeptMutation = useUpdateDepartment();
@@ -734,7 +755,7 @@ const DepartmentManagementPanel: React.FC = () => {
 
 export const EmployeeManagement: React.FC = () => {
   const { 
-    employees, setEmployees, activeSubModule, setActiveSubModule, 
+    employees: contextEmployees, setEmployees, activeSubModule, setActiveSubModule, 
     addAuditLog, selectedEmployeeId, setSelectedEmployeeId 
   } = useApp();
 
@@ -743,6 +764,99 @@ export const EmployeeManagement: React.FC = () => {
   const departmentOptions = dbDepartments.length > 0 
     ? dbDepartments.map(d => d.name) 
     : ['Engineering', 'Design', 'Product', 'Human Resources', 'Finance'];
+
+  // TanStack Query Hooks for Employee Modules
+  const { data: employeesResponse, isLoading: employeesLoading } = useEmployees();
+  const createEmployeeMutation = useCreateEmployee();
+  const deleteEmployeeMutation = useDeleteEmployee();
+  const updateSalaryMutation = useUpdateEmployeeSalary();
+  const updatePersonalMutation = useUpdateEmployeePersonal();
+
+  const dbEmployees = employeesResponse?.data || [];
+
+  const employees = dbEmployees.length > 0 ? dbEmployees.map(emp => {
+    return {
+      id: emp.id,
+      name: emp.name,
+      email: emp.email,
+      phone: emp.phone || '',
+      avatar: emp.avatar || (emp.gender === 'Female' 
+        ? "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120"
+        : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120"),
+      status: emp.status === 'ACTIVE' ? 'Active' :
+              emp.status === 'ON_LEAVE' ? 'On Leave' :
+              emp.status === 'PROBATION' ? 'Probation' :
+              emp.status === 'RESIGNED' ? 'Resigned' : 'Terminated',
+      joiningDate: emp.joiningDate ? new Date(emp.joiningDate).toISOString().split('T')[0] : '',
+      location: emp.location || 'Mumbai',
+      role: emp.designation || 'Software Engineer',
+      department: emp.department?.name || 'Engineering',
+      manager: emp.manager?.name || 'Neha Patel',
+      basic: emp.basic ?? 0,
+      hra: emp.hra ?? 0,
+      allowance: emp.allowance ?? 0,
+      deductions: emp.deductions ?? 0,
+      netSalary: emp.netSalary ?? 0,
+      bankName: emp.bankName || '',
+      bankAccount: emp.bankAccount || '',
+      ifsc: emp.ifsc || '',
+      pan: emp.pan || '',
+      aadhaar: emp.aadhaar || '',
+      uan: emp.uan || '',
+      pfNumber: emp.pfNumber || '',
+      gender: emp.gender || 'Male',
+      dob: emp.dob ? new Date(emp.dob).toISOString().split('T')[0] : '',
+      bloodGroup: emp.bloodGroup || 'O+',
+      maritalStatus: emp.maritalStatus || 'Single',
+      qualification: emp.qualification || '',
+      university: emp.university || '',
+      passingYear: emp.passingYear || '',
+      pastCompanies: (emp as any).pastCompanies || [],
+      promotions: (emp as any).promotions || [],
+      transfers: (emp as any).transfers || [],
+      probationDuration: emp.probationDuration || '6 Months',
+      probationEnd: emp.probationEnd ? new Date(emp.probationEnd).toISOString().split('T')[0] : '',
+      confirmationStatus: emp.confirmationStatus === 'CONFIRMED' ? 'Confirmed' :
+                          emp.confirmationStatus === 'EXTENDED' ? 'Extended' : 'Pending',
+      assets: (emp as any).assets || ['AST-100 (ID Card)'],
+      clearanceStatus: (emp.clearanceStatus === 'APPROVED' ? 'Approved' : 'Pending') as any,
+      exitDate: emp.exitDate ? new Date(emp.exitDate).toISOString().split('T')[0] : undefined,
+      userId: emp.userId
+    } as Employee;
+  }) : contextEmployees;
+
+  // Helper selectors
+  const activeEmployee = employees.find(e => e.id === selectedEmployeeId) || employees[0] || contextEmployees[0];
+
+  const { data: salaryResponse } = useEmployeeSalary(activeEmployee?.id);
+  const { data: personalResponse } = useEmployeePersonal(activeEmployee?.id);
+
+  const salaryDetails = salaryResponse?.data || activeEmployee;
+  const personalDetails = personalResponse?.data || activeEmployee;
+
+  // Personal Details Edit State
+  const [editPersonalMode, setEditPersonalMode] = useState(false);
+  const [pGender, setPGender] = useState('');
+  const [pDob, setPDob] = useState('');
+  const [pBloodGroup, setPBloodGroup] = useState('');
+  const [pMaritalStatus, setPMaritalStatus] = useState('');
+  const [pQualification, setPQualification] = useState('');
+  const [pUniversity, setPUniversity] = useState('');
+  const [pPassingYear, setPPassingYear] = useState('');
+
+  // Salary Details Edit State
+  const [editSalaryMode, setEditSalaryMode] = useState(false);
+  const [sBasic, setSBasic] = useState<number>(0);
+  const [sHra, setSHra] = useState<number>(0);
+  const [sAllowance, setSAllowance] = useState<number>(0);
+  const [sDeductions, setSDeductions] = useState<number>(0);
+  const [sBankName, setSBankName] = useState('');
+  const [sBankAccount, setSBankAccount] = useState('');
+  const [sIfsc, setSIfsc] = useState('');
+  const [sPan, setSPan] = useState('');
+  const [sAadhaar, setSAadhaar] = useState('');
+  const [sUan, setSUan] = useState('');
+  const [sPfNumber, setSPfNumber] = useState('');
 
   // Documents Upload Refs & State
   const documentFileInputRef = useRef<HTMLInputElement>(null);
@@ -816,9 +930,6 @@ export const EmployeeManagement: React.FC = () => {
   const [selectedBulkEmpIds, setSelectedBulkEmpIds] = useState<string[]>([]);
   const [dragActive, setDragActive] = useState(false);
 
-  // Helper selectors
-  const activeEmployee = employees.find(e => e.id === selectedEmployeeId) || employees[0];
-
   // Filtering Directory
   const filteredEmployees = employees.filter(emp => {
     const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -829,32 +940,135 @@ export const EmployeeManagement: React.FC = () => {
     return matchesSearch && matchesDept && matchesStatus;
   });
 
+  const handleDeleteEmployee = (id: string) => {
+    if (confirm("Are you sure you want to permanently delete this employee?")) {
+      deleteEmployeeMutation.mutate(id, {
+        onSuccess: () => {
+          setSelectedEmployeeId('');
+          setActiveSubModule('directory');
+          alert("Employee profile deleted successfully!");
+        },
+        onError: (err) => {
+          alert("Failed to delete employee: " + err.message);
+        }
+      });
+    }
+  };
+
+  const handleUpdatePersonal = (e: React.FormEvent) => {
+    e.preventDefault();
+    updatePersonalMutation.mutate({
+      id: activeEmployee.id,
+      data: {
+        gender: pGender,
+        dob: pDob || null,
+        bloodGroup: pBloodGroup || null,
+        maritalStatus: pMaritalStatus || null,
+        qualification: pQualification || null,
+        university: pUniversity || null,
+        passingYear: pPassingYear || null
+      }
+    }, {
+      onSuccess: () => {
+        setEditPersonalMode(false);
+        alert("Personal Details updated successfully in database!");
+      },
+      onError: (err) => {
+        alert("Failed to update personal details: " + err.message);
+      }
+    });
+  };
+
+  const handleUpdateSalary = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateSalaryMutation.mutate({
+      id: activeEmployee.id,
+      data: {
+        basic: sBasic,
+        hra: sHra,
+        allowance: sAllowance,
+        deductions: sDeductions,
+        bankName: sBankName || null,
+        bankAccount: sBankAccount || null,
+        ifsc: sIfsc || null,
+        pan: sPan || null,
+        aadhaar: sAadhaar || null,
+        uan: sUan || null,
+        pfNumber: sPfNumber || null
+      }
+    }, {
+      onSuccess: () => {
+        setEditSalaryMode(false);
+        alert("Salary Details updated successfully in database!");
+      },
+      onError: (err) => {
+        alert("Failed to update salary details: " + err.message);
+      }
+    });
+  };
+
   const handleCreateEmployee = () => {
-    const finalEmp: Employee = {
-      ...(newEmp as Employee),
-      avatar: newEmp.gender === 'Female' 
+    const finalEmp = {
+      employeeId: newEmp.id!,
+      name: newEmp.name!,
+      email: newEmp.email || `${newEmp.name?.toLowerCase().replace(/\s+/g, '')}@example.com`,
+      phone: newEmp.phone || null,
+      avatar: newEmp.avatar || (newEmp.gender === 'Female' 
         ? "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120"
-        : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120"
+        : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120"),
+      status: (newEmp.status?.toUpperCase() || 'PROBATION') as any,
+      joiningDate: newEmp.joiningDate || new Date().toISOString().split('T')[0],
+      location: newEmp.location || null,
+      designation: newEmp.role || null,
+      basic: newEmp.basic || null,
+      hra: newEmp.hra || null,
+      allowance: newEmp.allowance || null,
+      deductions: newEmp.deductions || null,
+      netSalary: newEmp.netSalary || null,
+      bankName: newEmp.bankName || null,
+      bankAccount: newEmp.bankAccount || null,
+      ifsc: newEmp.ifsc || null,
+      pan: newEmp.pan || null,
+      aadhaar: newEmp.aadhaar || null,
+      uan: newEmp.uan || null,
+      pfNumber: newEmp.pfNumber || null,
+      gender: newEmp.gender || null,
+      dob: newEmp.dob || null,
+      bloodGroup: newEmp.bloodGroup || null,
+      maritalStatus: newEmp.maritalStatus || null,
+      qualification: newEmp.qualification || null,
+      university: newEmp.university || null,
+      passingYear: newEmp.passingYear || null,
+      probationDuration: newEmp.probationDuration || null,
+      probationEnd: newEmp.probationEnd || null,
+      confirmationStatus: (newEmp.confirmationStatus?.toUpperCase() || 'PENDING') as any,
     };
 
-    setEmployees(prev => [...prev, finalEmp]);
-    addAuditLog("Onboarded Employee", "Employee Center", `Successfully registered employee ${finalEmp.name} (${finalEmp.id})`);
-    
-    // Reset Stepper
-    setStepperStep(1);
-    setNewEmp({
-      id: `EMP0${employees.length + 2}`,
-      name: '', role: '', department: 'Engineering', status: 'Probation',
-      joiningDate: new Date().toISOString().split('T')[0], location: 'Mumbai',
-      manager: 'Neha Patel', basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
-      bankName: '', bankAccount: '', ifsc: '', pan: '', aadhaar: '', uan: '', pfNumber: '',
-      gender: 'Male', dob: '', bloodGroup: 'O+', maritalStatus: 'Single',
-      qualification: '', university: '', passingYear: '', pastCompanies: [],
-      promotions: [], transfers: [], probationDuration: '6 Months', probationEnd: '',
-      confirmationStatus: 'Pending', assets: ['AST-100 (ID Card)']
+    createEmployeeMutation.mutate(finalEmp, {
+      onSuccess: () => {
+        addAuditLog("Onboarded Employee", "Employee Center", `Successfully registered employee ${finalEmp.name} (${finalEmp.employeeId})`);
+        
+        // Reset Stepper
+        setStepperStep(1);
+        setNewEmp({
+          id: `EMP0${employees.length + 2}`,
+          name: '', role: '', department: 'Engineering', status: 'Probation',
+          joiningDate: new Date().toISOString().split('T')[0], location: 'Mumbai',
+          manager: 'Neha Patel', basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
+          bankName: '', bankAccount: '', ifsc: '', pan: '', aadhaar: '', uan: '', pfNumber: '',
+          gender: 'Male', dob: '', bloodGroup: 'O+', maritalStatus: 'Single',
+          qualification: '', university: '', passingYear: '', pastCompanies: [],
+          promotions: [], transfers: [], probationDuration: '6 Months', probationEnd: '',
+          confirmationStatus: 'Pending', assets: ['AST-100 (ID Card)']
+        });
+        
+        setActiveSubModule('directory');
+        alert("Employee onboarded successfully to database!");
+      },
+      onError: (err) => {
+        alert("Error onboarding employee: " + err.message);
+      }
     });
-    
-    setActiveSubModule('directory');
   };
 
   const handleSendBulkMail = (e: React.FormEvent) => {
@@ -976,6 +1190,11 @@ export const EmployeeManagement: React.FC = () => {
       {/* ======================================= */}
       {activeSubModule === 'directory' && (
         <div className="space-y-4 animate-fade-in">
+          {employeesLoading && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 text-center text-xs text-slate-500 font-medium">
+              Syncing with backend database...
+            </div>
+          )}
           {/* Controls Bar */}
           <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="relative w-full md:w-80">
@@ -1171,6 +1390,13 @@ export const EmployeeManagement: React.FC = () => {
 
             <div className="flex items-center gap-2">
               <button 
+                onClick={() => handleDeleteEmployee(activeEmployee.id)}
+                disabled={deleteEmployeeMutation.isPending}
+                className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-semibold hover:scale-105 transition-all shadow-md shadow-red-500/10 disabled:opacity-50"
+              >
+                Delete Profile
+              </button>
+              <button 
                 onClick={() => {
                   alert("Triggering warning letter generation for " + activeEmployee.name);
                 }}
@@ -1214,37 +1440,146 @@ export const EmployeeManagement: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-xs">
                 {/* Personal details */}
                 <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-white border-b pb-2">Personal Details</h3>
-                  <div className="grid grid-cols-2 gap-3.5">
-                    <div><span className="text-slate-400 block">Gender</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.gender}</p></div>
-                    <div><span className="text-slate-400 block">Date of Birth</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.dob}</p></div>
-                    <div><span className="text-slate-400 block">Blood Group</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.bloodGroup}</p></div>
-                    <div><span className="text-slate-400 block">Marital Status</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.maritalStatus}</p></div>
-                    <div><span className="text-slate-400 block">Contact Email</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.email}</p></div>
-                    <div><span className="text-slate-400 block">Contact Phone</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.phone}</p></div>
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-white">Personal Details</h3>
+                    <button 
+                      onClick={() => {
+                        setPGender(personalDetails.gender || 'Male');
+                        setPDob(personalDetails.dob ? new Date(personalDetails.dob).toISOString().split('T')[0] : '');
+                        setPBloodGroup(personalDetails.bloodGroup || 'O+');
+                        setPMaritalStatus(personalDetails.maritalStatus || 'Single');
+                        setPQualification(personalDetails.qualification || '');
+                        setPUniversity(personalDetails.university || '');
+                        setPPassingYear(personalDetails.passingYear || '');
+                        setEditPersonalMode(!editPersonalMode);
+                      }}
+                      className="text-xs text-primary hover:underline font-bold"
+                    >
+                      {editPersonalMode ? 'Cancel' : 'Edit Details'}
+                    </button>
                   </div>
+                  {editPersonalMode ? (
+                    <form onSubmit={handleUpdatePersonal} className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-slate-400 font-medium">Gender</label>
+                          <select 
+                            value={pGender} 
+                            onChange={(e) => setPGender(e.target.value)}
+                            className="w-full px-2 py-1.5 border rounded bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                          >
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-slate-400 font-medium">Date of Birth</label>
+                          <input 
+                            type="date" 
+                            value={pDob} 
+                            onChange={(e) => setPDob(e.target.value)}
+                            className="w-full px-2 py-1.5 border rounded bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-slate-400 font-medium">Blood Group</label>
+                          <input 
+                            type="text" 
+                            value={pBloodGroup} 
+                            onChange={(e) => setPBloodGroup(e.target.value)}
+                            className="w-full px-2 py-1.5 border rounded bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-slate-400 font-medium">Marital Status</label>
+                          <select 
+                            value={pMaritalStatus} 
+                            onChange={(e) => setPMaritalStatus(e.target.value)}
+                            className="w-full px-2 py-1.5 border rounded bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                          >
+                            <option value="Single">Single</option>
+                            <option value="Married">Married</option>
+                            <option value="Divorced">Divorced</option>
+                          </select>
+                        </div>
+                      </div>
+                      <button 
+                        type="submit" 
+                        disabled={updatePersonalMutation.isPending}
+                        className="w-full py-2 bg-primary text-white rounded font-bold hover:opacity-90"
+                      >
+                        Save Personal Details
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3.5">
+                      <div><span className="text-slate-400 block">Gender</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.gender}</p></div>
+                      <div><span className="text-slate-400 block">Date of Birth</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.dob}</p></div>
+                      <div><span className="text-slate-400 block">Blood Group</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.bloodGroup}</p></div>
+                      <div><span className="text-slate-400 block">Marital Status</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.maritalStatus}</p></div>
+                      <div><span className="text-slate-400 block">Contact Email</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.email}</p></div>
+                      <div><span className="text-slate-400 block">Contact Phone</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.phone}</p></div>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Qualifications & Past Work */}
                 <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-white border-b pb-2">Academic & Career Background</h3>
-                  <div className="grid grid-cols-2 gap-3.5 mb-4">
-                    <div><span className="text-slate-400 block">Highest Degree</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.qualification}</p></div>
-                    <div><span className="text-slate-400 block">University</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.university}</p></div>
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-white">Academic & Career Background</h3>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block mb-1">Past Companies</span>
-                    {activeEmployee.pastCompanies.length === 0 ? (
-                      <p className="text-slate-450 italic">No past companies listed (Fresher)</p>
-                    ) : (
-                      activeEmployee.pastCompanies.map((c, i) => (
-                        <div key={i} className="mb-2 bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
-                          <p className="font-bold text-slate-800 dark:text-white">{c.company}</p>
-                          <p className="text-[10px] text-slate-400">{c.role} • {c.duration} • CTC: ₹{c.ctc}</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                  {editPersonalMode ? (
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="text-slate-400 font-medium">Highest Degree</label>
+                        <input 
+                          type="text" 
+                          value={pQualification} 
+                          onChange={(e) => setPQualification(e.target.value)}
+                          className="w-full px-2 py-1.5 border rounded bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-slate-400 font-medium">University</label>
+                        <input 
+                          type="text" 
+                          value={pUniversity} 
+                          onChange={(e) => setPUniversity(e.target.value)}
+                          className="w-full px-2 py-1.5 border rounded bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-slate-400 font-medium">Passing Year</label>
+                        <input 
+                          type="text" 
+                          value={pPassingYear} 
+                          onChange={(e) => setPPassingYear(e.target.value)}
+                          className="w-full px-2 py-1.5 border rounded bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-3.5 mb-4">
+                        <div><span className="text-slate-400 block">Highest Degree</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.qualification}</p></div>
+                        <div><span className="text-slate-400 block">University</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.university}</p></div>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block mb-1">Past Companies</span>
+                        {activeEmployee.pastCompanies.length === 0 ? (
+                          <p className="text-slate-450 italic">No past companies listed (Fresher)</p>
+                        ) : (
+                          activeEmployee.pastCompanies.map((c: { company: string; role: string; duration: string; ctc: string }, i: number) => (
+                            <div key={i} className="mb-2 bg-slate-50 dark:bg-slate-950 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                              <p className="font-bold text-slate-800 dark:text-white">{c.company}</p>
+                              <p className="text-[10px] text-slate-400">{c.role} • {c.duration} • CTC: ₹{c.ctc}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -1346,56 +1681,207 @@ export const EmployeeManagement: React.FC = () => {
 
             {profileTab === 'payroll' && (
               <div className="space-y-4 text-xs">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-white border-b pb-2">Salary Master Structure & CTC</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Earnings table */}
-                  <div className="border rounded-xl p-4 bg-slate-50 dark:bg-slate-950">
-                    <h4 className="font-bold text-slate-800 dark:text-white mb-2.5">Monthly Earnings</h4>
-                    <div className="space-y-2">
-                      <div className="flex justify-between"><span>Basic Salary</span><span className="font-bold text-slate-800 dark:text-white">₹{activeEmployee.basic.toLocaleString()}</span></div>
-                      <div className="flex justify-between"><span>HRA</span><span className="font-bold text-slate-800 dark:text-white">₹{activeEmployee.hra.toLocaleString()}</span></div>
-                      <div className="flex justify-between"><span>Special Allowance</span><span className="font-bold text-slate-800 dark:text-white">₹{activeEmployee.allowance.toLocaleString()}</span></div>
-                      <div className="border-t pt-2 flex justify-between font-bold text-emerald-600 dark:text-emerald-400 text-sm">
-                        <span>Gross Salary</span>
-                        <span>₹{(activeEmployee.basic + activeEmployee.hra + activeEmployee.allowance).toLocaleString()}</span>
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white">Salary Master Structure & CTC</h3>
+                  <button 
+                    onClick={() => {
+                      setSBasic(salaryDetails.basic || 0);
+                      setSHra(salaryDetails.hra || 0);
+                      setSAllowance(salaryDetails.allowance || 0);
+                      setSDeductions(salaryDetails.deductions || 0);
+                      setSBankName(salaryDetails.bankName || '');
+                      setSBankAccount(salaryDetails.bankAccount || '');
+                      setSIfsc(salaryDetails.ifsc || '');
+                      setSPan(salaryDetails.pan || '');
+                      setSAadhaar(salaryDetails.aadhaar || '');
+                      setSUan(salaryDetails.uan || '');
+                      setSPfNumber(salaryDetails.pfNumber || '');
+                      setEditSalaryMode(!editSalaryMode);
+                    }}
+                    className="text-xs text-primary hover:underline font-bold"
+                  >
+                    {editSalaryMode ? 'Cancel' : 'Edit Structure'}
+                  </button>
+                </div>
+                {editSalaryMode ? (
+                  <form onSubmit={handleUpdateSalary} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="border rounded-xl p-4 bg-slate-50 dark:bg-slate-950 space-y-3">
+                        <h4 className="font-bold text-slate-800 dark:text-white mb-2">Edit Monthly Earnings</h4>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span>Basic Salary</span>
+                            <input 
+                              type="number" 
+                              value={sBasic} 
+                              onChange={(e) => setSBasic(Number(e.target.value))}
+                              className="w-32 px-2 py-1 border rounded bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span>HRA</span>
+                            <input 
+                              type="number" 
+                              value={sHra} 
+                              onChange={(e) => setSHra(Number(e.target.value))}
+                              className="w-32 px-2 py-1 border rounded bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span>Special Allowance</span>
+                            <input 
+                              type="number" 
+                              value={sAllowance} 
+                              onChange={(e) => setSAllowance(Number(e.target.value))}
+                              className="w-32 px-2 py-1 border rounded bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  
-                  {/* Deductions and Bank */}
-                  <div className="space-y-4">
-                    <div className="border rounded-xl p-4 bg-slate-50 dark:bg-slate-950">
-                      <h4 className="font-bold text-slate-800 dark:text-white mb-2.5">Monthly Deductions</h4>
-                      <div className="space-y-2">
-                        <div className="flex justify-between"><span>Provident Fund (PF)</span><span className="font-bold text-slate-800 dark:text-white">₹3,200</span></div>
-                        <div className="flex justify-between"><span>Professional Tax (PT)</span><span className="font-bold text-slate-800 dark:text-white">₹200</span></div>
-                        <div className="flex justify-between"><span>Income Tax (TDS mock)</span><span className="font-bold text-slate-800 dark:text-white">₹{(activeEmployee.deductions - 3400).toLocaleString()}</span></div>
-                        <div className="border-t pt-2 flex justify-between font-bold text-rose-600 dark:text-rose-400 text-sm">
-                          <span>Total Deductions</span>
-                          <span>₹{activeEmployee.deductions.toLocaleString()}</span>
+                      
+                      <div className="border rounded-xl p-4 bg-slate-50 dark:bg-slate-950 space-y-3">
+                        <h4 className="font-bold text-slate-800 dark:text-white mb-2">Edit Monthly Deductions & Bank</h4>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span>Total Deductions</span>
+                            <input 
+                              type="number" 
+                              value={sDeductions} 
+                              onChange={(e) => setSDeductions(Number(e.target.value))}
+                              className="w-32 px-2 py-1 border rounded bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span>Bank Name</span>
+                            <input 
+                              type="text" 
+                              value={sBankName} 
+                              onChange={(e) => setSBankName(e.target.value)}
+                              className="w-32 px-2 py-1 border rounded bg-white dark:bg-slate-900"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span>Bank Account No</span>
+                            <input 
+                              type="text" 
+                              value={sBankAccount} 
+                              onChange={(e) => setSBankAccount(e.target.value)}
+                              className="w-32 px-2 py-1 border rounded bg-white dark:bg-slate-900"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="p-3 border rounded-xl flex items-center justify-between">
-                      <div>
-                        <p className="font-bold text-slate-800 dark:text-white">Net Credited</p>
-                        <p className="text-[10px] text-slate-400">Direct Bank Deposit</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-xl bg-slate-50 dark:bg-slate-950">
+                      <div className="space-y-1">
+                        <span className="text-slate-400">IFSC Code</span>
+                        <input 
+                          type="text" 
+                          value={sIfsc} 
+                          onChange={(e) => setSIfsc(e.target.value)}
+                          className="w-full px-2 py-1 border rounded bg-white dark:bg-slate-900"
+                        />
                       </div>
-                      <span className="text-lg font-extrabold text-primary">₹{activeEmployee.netSalary.toLocaleString()}</span>
+                      <div className="space-y-1">
+                        <span className="text-slate-400">PAN</span>
+                        <input 
+                          type="text" 
+                          value={sPan} 
+                          onChange={(e) => setSPan(e.target.value)}
+                          className="w-full px-2 py-1 border rounded bg-white dark:bg-slate-900"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-slate-400">Aadhaar</span>
+                        <input 
+                          type="text" 
+                          value={sAadhaar} 
+                          onChange={(e) => setSAadhaar(e.target.value)}
+                          className="w-full px-2 py-1 border rounded bg-white dark:bg-slate-900"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-slate-400">UAN</span>
+                        <input 
+                          type="text" 
+                          value={sUan} 
+                          onChange={(e) => setSUan(e.target.value)}
+                          className="w-full px-2 py-1 border rounded bg-white dark:bg-slate-900"
+                        />
+                      </div>
+                      <div className="space-y-1 col-span-2">
+                        <span className="text-slate-400">PF Number</span>
+                        <input 
+                          type="text" 
+                          value={sPfNumber} 
+                          onChange={(e) => setSPfNumber(e.target.value)}
+                          className="w-full px-2 py-1 border rounded bg-white dark:bg-slate-900"
+                        />
+                      </div>
                     </div>
-                  </div>
-                </div>
+                    
+                    <button 
+                      type="submit" 
+                      disabled={updateSalaryMutation.isPending}
+                      className="w-full py-2.5 bg-primary text-white rounded-xl font-bold hover:opacity-90"
+                    >
+                      Save Salary Structure Changes
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Earnings table */}
+                      <div className="border rounded-xl p-4 bg-slate-50 dark:bg-slate-950">
+                        <h4 className="font-bold text-slate-800 dark:text-white mb-2.5">Monthly Earnings</h4>
+                        <div className="space-y-2">
+                          <div className="flex justify-between"><span>Basic Salary</span><span className="font-bold text-slate-800 dark:text-white">₹{(salaryDetails.basic ?? 0).toLocaleString()}</span></div>
+                          <div className="flex justify-between"><span>HRA</span><span className="font-bold text-slate-800 dark:text-white">₹{(salaryDetails.hra ?? 0).toLocaleString()}</span></div>
+                          <div className="flex justify-between"><span>Special Allowance</span><span className="font-bold text-slate-800 dark:text-white">₹{(salaryDetails.allowance ?? 0).toLocaleString()}</span></div>
+                          <div className="border-t pt-2 flex justify-between font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                            <span>Gross Salary</span>
+                            <span>₹{((salaryDetails.basic ?? 0) + (salaryDetails.hra ?? 0) + (salaryDetails.allowance ?? 0)).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Deductions and Bank */}
+                      <div className="space-y-4">
+                        <div className="border rounded-xl p-4 bg-slate-50 dark:bg-slate-950">
+                          <h4 className="font-bold text-slate-800 dark:text-white mb-2.5">Monthly Deductions</h4>
+                          <div className="space-y-2">
+                            <div className="flex justify-between"><span>Provident Fund (PF)</span><span className="font-bold text-slate-800 dark:text-white">₹3,200</span></div>
+                            <div className="flex justify-between"><span>Professional Tax (PT)</span><span className="font-bold text-slate-800 dark:text-white">₹200</span></div>
+                            <div className="flex justify-between"><span>Income Tax (TDS mock)</span><span className="font-bold text-slate-800 dark:text-white">₹{((salaryDetails.deductions ?? 0) - 3400).toLocaleString()}</span></div>
+                            <div className="border-t pt-2 flex justify-between font-bold text-rose-600 dark:text-rose-400 text-sm">
+                              <span>Total Deductions</span>
+                              <span>₹{(salaryDetails.deductions ?? 0).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
 
-                <div className="mt-4 border rounded-xl p-4">
-                  <h4 className="font-bold text-slate-800 dark:text-white mb-2">PF & Bank Remittance Codes</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[10px]">
-                    <div><span className="text-slate-400">Bank</span><p className="font-semibold text-slate-800 dark:text-white">{activeEmployee.bankName}</p></div>
-                    <div><span className="text-slate-400">Account No</span><p className="font-semibold text-slate-800 dark:text-white">{activeEmployee.bankAccount}</p></div>
-                    <div><span className="text-slate-400">Universal Account No (UAN)</span><p className="font-semibold text-slate-800 dark:text-white">{activeEmployee.uan}</p></div>
-                    <div><span className="text-slate-400">PF Member ID</span><p className="font-semibold text-slate-800 dark:text-white">{activeEmployee.pfNumber}</p></div>
-                  </div>
-                </div>
+                        <div className="p-3 border rounded-xl flex items-center justify-between">
+                          <div>
+                            <p className="font-bold text-slate-800 dark:text-white">Net Credited</p>
+                            <p className="text-[10px] text-slate-400">Direct Bank Deposit</p>
+                          </div>
+                          <span className="text-lg font-extrabold text-primary">₹{(salaryDetails.netSalary ?? 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 border rounded-xl p-4">
+                      <h4 className="font-bold text-slate-800 dark:text-white mb-2">PF & Bank Remittance Codes</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[10px]">
+                        <div><span className="text-slate-400">Bank</span><p className="font-semibold text-slate-800 dark:text-white">{salaryDetails.bankName}</p></div>
+                        <div><span className="text-slate-400">Account No</span><p className="font-semibold text-slate-800 dark:text-white">{salaryDetails.bankAccount}</p></div>
+                        <div><span className="text-slate-400">Universal Account No (UAN)</span><p className="font-semibold text-slate-800 dark:text-white">{salaryDetails.uan}</p></div>
+                        <div><span className="text-slate-400">PF Member ID</span><p className="font-semibold text-slate-800 dark:text-white">{salaryDetails.pfNumber}</p></div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -1439,7 +1925,7 @@ export const EmployeeManagement: React.FC = () => {
               <div className="space-y-4 text-xs">
                 <h3 className="text-sm font-bold text-slate-800 dark:text-white border-b pb-2">Assigned Hardware & IT Assets</h3>
                 <div className="space-y-2">
-                  {activeEmployee.assets.map((ast, idx) => (
+                  {activeEmployee.assets.map((ast: string, idx: number) => (
                     <div key={idx} className="p-3 border rounded-xl bg-slate-50 dark:bg-slate-950 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <QrCode className="h-5 w-5 text-slate-400" />
@@ -1462,7 +1948,7 @@ export const EmployeeManagement: React.FC = () => {
                     <p className="text-[10px] text-slate-400">{activeEmployee.joiningDate}</p>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">Hired as {activeEmployee.role} in {activeEmployee.department} team located in {activeEmployee.location}.</p>
                   </div>
-                  {activeEmployee.promotions.map((p, idx) => (
+                  {activeEmployee.promotions.map((p: { date: string; oldRole: string; newRole: string; salaryIncrement: string }, idx: number) => (
                     <div key={idx} className="relative pb-2">
                       <span className="absolute -left-6.5 top-0.5 h-3.5 w-3.5 rounded-full bg-green-500 border-2 border-white dark:border-slate-900"></span>
                       <p className="font-bold text-green-600 dark:text-green-400">Promotion / Salary Revision</p>
@@ -1470,7 +1956,7 @@ export const EmployeeManagement: React.FC = () => {
                       <p className="text-slate-500 dark:text-slate-400 mt-1">Promoted from {p.oldRole} to {p.newRole} with an increment of {p.salaryIncrement}.</p>
                     </div>
                   ))}
-                  {activeEmployee.transfers.map((t, idx) => (
+                  {activeEmployee.transfers.map((t: { date: string; oldDept: string; newDept: string; location: string }, idx: number) => (
                     <div key={idx} className="relative">
                       <span className="absolute -left-6.5 top-0.5 h-3.5 w-3.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900"></span>
                       <p className="font-bold text-blue-600 dark:text-blue-400">Departmental Transfer</p>
@@ -2035,14 +2521,14 @@ export const EmployeeManagement: React.FC = () => {
       {/* 5. ROLE & PERMISSION MANAGEMENT         */}
       {/* ======================================= */}
       {activeSubModule === 'roles' && (
-        <RoleManagementPanel />
+        <RoleManagementPanel employees={employees} />
       )}
 
       {/* ======================================= */}
       {/* 7. DEPARTMENT MANAGEMENT                */}
       {/* ======================================= */}
       {activeSubModule === 'departments' && (
-        <DepartmentManagementPanel />
+        <DepartmentManagementPanel employees={employees} />
       )}
 
     </div>

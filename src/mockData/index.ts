@@ -10,6 +10,7 @@ export interface Employee {
   joiningDate: string;
   location: string;
   manager: string;
+  userId?: string | null;
   
   // Salary Details
   basic: number;
