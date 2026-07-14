@@ -1,5 +1,1 @@
-import { createApp } from 'vue'
-import './style.css'
-import App from './App.vue'
-
-createApp(App).mount('#app')
+// Unused Vue entrypoint (This project is configured as a React app using main.tsx)

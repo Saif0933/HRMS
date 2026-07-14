@@ -19,6 +19,22 @@ import {
 } from 'lucide-react';
 import React, { useRef, useState } from 'react';
 import {
+  Department,
+  useCreateDepartment,
+  useDeleteDepartment,
+  useDepartments,
+  useUpdateDepartment
+} from '../api/hook/useDepartment';
+import {
+  useCreateEmployee,
+  useDeleteEmployee,
+  useEmployeePersonal,
+  useEmployees,
+  useEmployeeSalary,
+  useUpdateEmployeePersonal,
+  useUpdateEmployeeSalary
+} from '../api/hook/useEmployee';
+import {
   useAssignRole,
   useCreatePermission,
   useCreateRole,
@@ -28,23 +44,6 @@ import {
   useUpdateRole
 } from '../api/hook/useRole';
 import { Employee, useApp } from '../context/AppContext';
-import {
-  useDepartments,
-  useCreateDepartment,
-  useUpdateDepartment,
-  useDeleteDepartment,
-  Department
-} from '../api/hook/useDepartment';
-import {
-  useEmployees,
-  useCreateEmployee,
-  useUpdateEmployee,
-  useDeleteEmployee,
-  useEmployeeSalary,
-  useUpdateEmployeeSalary,
-  useEmployeePersonal,
-  useUpdateEmployeePersonal
-} from '../api/hook/useEmployee';
 
 interface RoleManagementPanelProps {
   employees: Employee[];
@@ -2032,6 +2031,16 @@ export const EmployeeManagement: React.FC = () => {
                     value={newEmp.name} 
                     onChange={(e) => setNewEmp({ ...newEmp, name: e.target.value })}
                     placeholder="Enter full name" 
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Phone Number</label>
+                  <input 
+                    type="tel" 
+                    value={newEmp.phone || ''} 
+                    onChange={(e) => setNewEmp({ ...newEmp, phone: e.target.value })}
+                    placeholder="Enter phone number" 
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
                   />
                 </div>

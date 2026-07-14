@@ -1,7 +1,1 @@
-<script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
-</script>
-
-<template>
-  <HelloWorld />
-</template>
+<!-- Unused Vue template (This project is configured as a React app using App.tsx) -->

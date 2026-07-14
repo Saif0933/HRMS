@@ -57,7 +57,15 @@ const MainLayout: React.FC = () => {
 };
 
 // Create QueryClient instance
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1,
+    },
+  },
+});
 
 export const App: React.FC = () => {
   return (
