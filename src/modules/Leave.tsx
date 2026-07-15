@@ -1,8 +1,9 @@
 import {
-  Check, X, Calendar, FileText, Plus, AlertCircle, ShieldAlert, Trash2, Clock
+  Check, X, Calendar, FileText, Plus, AlertCircle, ShieldAlert, Trash2, Clock, Edit
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { useEmployees } from '../api/hook/useEmployee';
 import {
   useLeaveTypes,
   useLeaveAllocations,
@@ -13,16 +14,19 @@ import {
   useCreateLeaveType,
   useUpdateLeaveType,
   useDeleteLeaveType,
+  useAllocateLeave,
   LeaveStatus,
-  HalfDaySession
+  HalfDaySession,
+  LeaveType
 } from '../api/hook/useLeave';
+
 
 export const Leave: React.FC = () => {
   const { 
-    activeSubModule, setActiveSubModule, addAuditLog, userRole, employees, currentUser 
+    activeSubModule, setActiveSubModule, addAuditLog, userRole, currentUser 
   } = useApp();
 
-  const activeUser = currentUser || employees[0];
+  const isAdmin = userRole === 'Super Admin' || userRole === 'HR Admin';
 
   // Leave Form States
   const [selectedLeaveTypeId, setSelectedLeaveTypeId] = useState('');
@@ -33,6 +37,7 @@ export const Leave: React.FC = () => {
   const [reason, setReason] = useState('');
 
   // Admin Create/Update Type States
+  const [editingType, setEditingType] = useState<LeaveType | null>(null);
   const [typeName, setTypeName] = useState('');
   const [typeCode, setTypeCode] = useState('');
   const [typeDesc, setTypeDesc] = useState('');
@@ -40,14 +45,29 @@ export const Leave: React.FC = () => {
   const [typeCarryForward, setTypeCarryForward] = useState(false);
   const [typeMaxCarry, setTypeMaxCarry] = useState(0);
 
+  // Quick Add Leave Type States
+  const [showQuickAddType, setShowQuickAddType] = useState(false);
+  const [quickTypeName, setQuickTypeName] = useState('');
+  const [quickTypeCode, setQuickTypeCode] = useState('');
+  const [quickTypeDays, setQuickTypeDays] = useState(10);
+
+
+  // Leave Allocation States
+  const [showAllocateForm, setShowAllocateForm] = useState(false);
+  const [allocateTypeId, setAllocateTypeId] = useState('');
+  const [allocateDays, setAllocateDays] = useState(12);
+  const [allocateCarried, setAllocateCarried] = useState(0);
+  const [allocateYear, setAllocateYear] = useState(new Date().getFullYear());
+
+  // Employee Selection State for Admin/Manager
+  const [selectedEmployeeIdState, setSelectedEmployeeIdState] = useState('');
+
   // Queries & Mutations
+  const { data: dbEmployeesRes, isLoading: loadingEmployees } = useEmployees();
+  const dbEmployees = dbEmployeesRes?.data || [];
+
   const { data: leaveTypesRes, isLoading: loadingTypes } = useLeaveTypes();
   const leaveTypes = leaveTypesRes?.data || [];
-
-  const { data: allocationsRes, isLoading: loadingAllocations } = useLeaveAllocations({
-    employeeId: activeUser?.id,
-  });
-  const allocations = allocationsRes?.data || [];
 
   const { data: requestsRes, isLoading: loadingRequests } = useLeaveRequests();
   const allRequests = requestsRes?.data || [];
@@ -56,7 +76,30 @@ export const Leave: React.FC = () => {
   const processRequestMutation = useProcessLeaveRequest();
   const cancelRequestMutation = useCancelLeaveRequest();
   const createTypeMutation = useCreateLeaveType();
+  const updateTypeMutation = useUpdateLeaveType();
   const deleteTypeMutation = useDeleteLeaveType();
+  const allocateMutation = useAllocateLeave();
+
+  // Setup activeUser based on selections
+  useEffect(() => {
+    if (currentUser) {
+      const matched = dbEmployees.find(e => e.email?.toLowerCase() === currentUser?.email?.toLowerCase());
+      if (matched) {
+        setSelectedEmployeeIdState(matched.id);
+      } else if (dbEmployees.length > 0) {
+        setSelectedEmployeeIdState(dbEmployees[0].id);
+      }
+    } else if (dbEmployees.length > 0 && !selectedEmployeeIdState) {
+      setSelectedEmployeeIdState(dbEmployees[0].id);
+    }
+  }, [dbEmployees, currentUser]);
+
+  const activeUser = dbEmployees.find(e => e.id === selectedEmployeeIdState) || dbEmployees.find(e => e.email?.toLowerCase() === currentUser?.email?.toLowerCase()) || currentUser || dbEmployees[0];
+
+  const { data: allocationsRes, isLoading: loadingAllocations } = useLeaveAllocations({
+    employeeId: activeUser?.id,
+  });
+  const allocations = allocationsRes?.data || [];
 
   // Set default selected leave type
   useEffect(() => {
@@ -65,6 +108,13 @@ export const Leave: React.FC = () => {
       if (active) setSelectedLeaveTypeId(active.id);
     }
   }, [leaveTypes, selectedLeaveTypeId]);
+
+  useEffect(() => {
+    if (leaveTypes.length > 0 && !allocateTypeId) {
+      const active = leaveTypes.find(t => t.isActive);
+      if (active) setAllocateTypeId(active.id);
+    }
+  }, [leaveTypes, allocateTypeId]);
 
   // Adjust end date if half-day is toggled
   useEffect(() => {
@@ -87,6 +137,10 @@ export const Leave: React.FC = () => {
     e.preventDefault();
     if (!selectedLeaveTypeId) {
       alert("Please select a leave type category.");
+      return;
+    }
+    if (!activeUser) {
+      alert("No active employee profile selected.");
       return;
     }
 
@@ -121,6 +175,7 @@ export const Leave: React.FC = () => {
         data: { status: 'APPROVED' },
       });
       addAuditLog("Approved Leave Request", "Leave Management", `Approved leave request ${id} for ${name}`);
+      alert(`Leave request approved successfully!`);
     } catch (err: any) {
       alert(err.response?.data?.message || err.message || "Failed to approve request.");
     }
@@ -134,6 +189,7 @@ export const Leave: React.FC = () => {
         data: { status: 'REJECTED', rejectionReason: reasonPrompt },
       });
       addAuditLog("Rejected Leave Request", "Leave Management", `Rejected leave request ${id} for ${name}`);
+      alert(`Leave request rejected.`);
     } catch (err: any) {
       alert(err.response?.data?.message || err.message || "Failed to reject request.");
     }
@@ -144,24 +200,69 @@ export const Leave: React.FC = () => {
     try {
       await cancelRequestMutation.mutateAsync(id);
       addAuditLog("Cancelled Leave Request", "Leave Management", `Cancelled leave request ${id}`);
+      alert("Leave request cancelled successfully.");
     } catch (err: any) {
       alert(err.response?.data?.message || err.message || "Failed to cancel request.");
     }
   };
 
-  const handleCreateLeaveType = async (e: React.FormEvent) => {
+  const handleQuickAddTypeSave = async () => {
+    if (!quickTypeName || !quickTypeCode) {
+      alert("Name and Code are required");
+      return;
+    }
+    try {
+      const res = await createTypeMutation.mutateAsync({
+        name: quickTypeName,
+        code: quickTypeCode.toUpperCase(),
+        defaultDays: quickTypeDays,
+        carryForward: false,
+        maxCarryForward: 0,
+      });
+      addAuditLog("Created Leave Type", "Leave Management", `Quick-created new leave category: ${quickTypeName} (${quickTypeCode})`);
+      if (res?.data?.id) {
+        setSelectedLeaveTypeId(res.data.id);
+      }
+      setQuickTypeName('');
+      setQuickTypeCode('');
+      setQuickTypeDays(10);
+      setShowQuickAddType(false);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err.message || "Failed to create leave category");
+    }
+  };
+
+  const handleSaveLeaveType = async (e: React.FormEvent) => {
+
     e.preventDefault();
     try {
-      await createTypeMutation.mutateAsync({
-        name: typeName,
-        code: typeCode,
-        description: typeDesc,
-        defaultDays: typeDefaultDays,
-        carryForward: typeCarryForward,
-        maxCarryForward: typeMaxCarry,
-      });
-      addAuditLog("Created Leave Type", "Leave Management", `Created leave type configuration ${typeName} (${typeCode})`);
-      alert("Leave type created successfully!");
+      if (editingType) {
+        await updateTypeMutation.mutateAsync({
+          id: editingType.id,
+          data: {
+            name: typeName,
+            code: typeCode.toUpperCase(),
+            description: typeDesc,
+            defaultDays: typeDefaultDays,
+            carryForward: typeCarryForward,
+            maxCarryForward: typeMaxCarry,
+          }
+        });
+        addAuditLog("Updated Leave Type", "Leave Management", `Updated leave type configuration ${typeName} (${typeCode})`);
+        alert("Leave type updated successfully!");
+        setEditingType(null);
+      } else {
+        await createTypeMutation.mutateAsync({
+          name: typeName,
+          code: typeCode.toUpperCase(),
+          description: typeDesc,
+          defaultDays: typeDefaultDays,
+          carryForward: typeCarryForward,
+          maxCarryForward: typeMaxCarry,
+        });
+        addAuditLog("Created Leave Type", "Leave Management", `Created leave type configuration ${typeName} (${typeCode})`);
+        alert("Leave type created successfully!");
+      }
       setTypeName('');
       setTypeCode('');
       setTypeDesc('');
@@ -169,8 +270,28 @@ export const Leave: React.FC = () => {
       setTypeCarryForward(false);
       setTypeMaxCarry(0);
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || "Failed to create leave type.");
+      alert(err.response?.data?.message || err.message || "Failed to save leave type.");
     }
+  };
+
+  const startEditingType = (type: LeaveType) => {
+    setEditingType(type);
+    setTypeName(type.name);
+    setTypeCode(type.code);
+    setTypeDesc(type.description || '');
+    setTypeDefaultDays(type.defaultDays);
+    setTypeCarryForward(type.carryForward);
+    setTypeMaxCarry(type.maxCarryForward || 0);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingType(null);
+    setTypeName('');
+    setTypeCode('');
+    setTypeDesc('');
+    setTypeDefaultDays(12);
+    setTypeCarryForward(false);
+    setTypeMaxCarry(0);
   };
 
   const handleDeleteType = async (id: string, name: string) => {
@@ -178,8 +299,35 @@ export const Leave: React.FC = () => {
     try {
       await deleteTypeMutation.mutateAsync(id);
       addAuditLog("Deactivated Leave Type", "Leave Management", `Deactivated leave type ${name}`);
+      alert("Leave type deactivated/deleted successfully!");
     } catch (err: any) {
       alert(err.response?.data?.message || err.message || "Failed to delete leave type.");
+    }
+  };
+
+  const handleAllocateLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!allocateTypeId) {
+      alert("Please select a leave category to allocate.");
+      return;
+    }
+    if (!activeUser) {
+      alert("No active employee resolved for allocation.");
+      return;
+    }
+    try {
+      await allocateMutation.mutateAsync({
+        employeeId: activeUser.id,
+        leaveTypeId: allocateTypeId,
+        allocated: allocateDays,
+        carriedForward: allocateCarried,
+        year: allocateYear,
+      });
+      addAuditLog("Allocated Leave", "Leave Management", `Allocated ${allocateDays} days of ${leaveTypes.find(t => t.id === allocateTypeId)?.name} for ${activeUser.name}`);
+      alert("Leave allocation updated successfully!");
+      setShowAllocateForm(false);
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || "Failed to allocate leaves.");
     }
   };
 
@@ -199,7 +347,37 @@ export const Leave: React.FC = () => {
     }
   };
 
-  const isAdmin = userRole === 'Super Admin' || userRole === 'HR Admin';
+  if (loadingEmployees || loadingTypes || loadingRequests) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <Clock className="h-10 w-10 text-primary animate-spin" />
+        <p className="text-sm font-semibold text-slate-500 dark:text-slate-450 animate-pulse">
+          Loading Leave Portal data...
+        </p>
+      </div>
+    );
+  }
+
+  if (!activeUser) {
+    return (
+      <div className="p-6 text-center text-slate-400">
+        No active employee profile resolved. Please check your account details.
+      </div>
+    );
+  }
+
+  // Filter pending requests for approval console based on roles and hierarchy
+  const pendingRequests = allRequests.filter(req => {
+    if (req.status !== 'PENDING') return false;
+    if (userRole === 'Super Admin' || userRole === 'HR Admin') {
+      return true;
+    }
+    if (userRole === 'Manager') {
+      const applicant = dbEmployees.find(e => e.id === req.employeeId);
+      return applicant?.managerId === activeUser?.id;
+    }
+    return false;
+  });
 
   return (
     <div className="space-y-6">
@@ -268,11 +446,41 @@ export const Leave: React.FC = () => {
           
           {/* Apply Form */}
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-1">
-            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Apply for Leave</h3>
+            {isAdmin && dbEmployees.length > 0 && (
+              <div className="space-y-1 pb-3 border-b border-slate-150 dark:border-slate-800">
+                <label className="text-slate-400 font-semibold block mb-1">View/Manage leaves for:</label>
+                <select
+                  value={selectedEmployeeIdState}
+                  onChange={(e) => setSelectedEmployeeIdState(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-955 text-slate-750 dark:text-slate-300 focus:outline-none font-bold"
+                >
+                  {dbEmployees.map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.designation || 'Staff'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            <h3 className="font-bold text-slate-800 dark:text-white text-sm">
+              Apply for Leave {isAdmin && `(${activeUser.name})`}
+            </h3>
             
             <form onSubmit={handleApplyLeave} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-slate-400 font-medium">Leave Type Category</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-slate-400 font-medium">Leave Type Category</label>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickAddType(!showQuickAddType)}
+                      className="text-[11px] text-primary hover:underline flex items-center gap-0.5"
+                    >
+                      <Plus className="h-3 w-3" /> Quick Add
+                    </button>
+                  )}
+                </div>
                 {loadingTypes ? (
                   <div className="h-9 w-full bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" />
                 ) : (
@@ -281,14 +489,75 @@ export const Leave: React.FC = () => {
                     onChange={(e) => setSelectedLeaveTypeId(e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-300 focus:outline-none"
                   >
-                    {leaveTypes.filter(t => t.isActive).map(type => (
-                      <option key={type.id} value={type.id}>
-                        {type.name} ({type.code})
-                      </option>
-                    ))}
+                    {leaveTypes.filter(t => t.isActive).length === 0 ? (
+                      <option value="">No Active Leave Categories Available</option>
+                    ) : (
+                      <>
+                        <option value="" disabled>Select Leave Type Category</option>
+                        {leaveTypes.filter(t => t.isActive).map(type => (
+                          <option key={type.id} value={type.id}>
+                            {type.name} ({type.code})
+                          </option>
+                        ))}
+                      </>
+                    )}
                   </select>
                 )}
+
+                {showQuickAddType && isAdmin && (
+                  <div className="p-3 border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-lg space-y-2 mt-2 animate-fade-in">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px] block">Quick Add Leave Category</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input 
+                        type="text"
+                        placeholder="Name (e.g. Paternity)"
+                        value={quickTypeName}
+                        onChange={(e) => setQuickTypeName(e.target.value)}
+                        className="px-2.5 py-1 border rounded text-[11px] bg-white dark:bg-slate-950 text-slate-850 dark:text-slate-200 focus:outline-none"
+                      />
+                      <input 
+                        type="text"
+                        placeholder="Code (e.g. PT)"
+                        value={quickTypeCode}
+                        onChange={(e) => setQuickTypeCode(e.target.value)}
+                        className="px-2.5 py-1 border rounded text-[11px] bg-white dark:bg-slate-955 text-slate-850 dark:text-slate-200 uppercase focus:outline-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input 
+                        type="number"
+                        placeholder="Days (e.g. 10)"
+                        value={quickTypeDays === 0 ? '' : quickTypeDays}
+                        onChange={(e) => setQuickTypeDays(Number(e.target.value))}
+                        className="px-2.5 py-1 border rounded text-[11px] bg-white dark:bg-slate-955 text-slate-850 dark:text-slate-200 focus:outline-none"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={createTypeMutation.isPending}
+                          onClick={handleQuickAddTypeSave}
+                          className="flex-1 bg-primary text-white text-[11px] rounded font-bold hover:bg-primary/95 transition-all"
+                        >
+                          {createTypeMutation.isPending ? "..." : "Save"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowQuickAddType(false);
+                            setQuickTypeName('');
+                            setQuickTypeCode('');
+                            setQuickTypeDays(10);
+                          }}
+                          className="px-2.5 py-1 bg-slate-200 dark:bg-slate-800 text-[11px] rounded hover:bg-slate-300 transition-all text-slate-700 dark:text-slate-350"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
+
 
               <div className="flex items-center gap-2 py-1">
                 <input 
@@ -370,8 +639,89 @@ export const Leave: React.FC = () => {
 
           {/* Leave Balances & History */}
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-2">
-            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Accrued Leave Balances</h3>
+            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex justify-between items-center">
+              <span>Accrued Leave Balances</span>
+              {isAdmin && (
+                <button 
+                  onClick={() => setShowAllocateForm(!showAllocateForm)}
+                  className="text-xs text-primary font-bold hover:underline flex items-center gap-1"
+                >
+                  <Plus className="h-3.5 w-3.5" /> {showAllocateForm ? "Hide Allocate Panel" : "Allocate Leaves"}
+                </button>
+              )}
+            </h3>
             
+            {showAllocateForm && isAdmin && (
+              <form onSubmit={handleAllocateLeave} className="p-4 border border-indigo-100 dark:border-indigo-950/60 bg-indigo-50/20 dark:bg-indigo-950/10 rounded-xl space-y-3.5 animate-fade-in">
+                <span className="font-bold text-slate-800 dark:text-white text-xs block">Allocate / Adjust Leave Balance</span>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-medium">Leave Type</label>
+                    <select
+                      value={allocateTypeId}
+                      onChange={(e) => setAllocateTypeId(e.target.value)}
+                      className="w-full px-2 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-350 text-xs focus:outline-none"
+                    >
+                      {leaveTypes.filter(t => t.isActive).length === 0 ? (
+                        <option value="">No Active Categories</option>
+                      ) : (
+                        <>
+                          <option value="" disabled>Select Category</option>
+                          {leaveTypes.filter(t => t.isActive).map(t => (
+                            <option key={t.id} value={t.id}>{t.name} ({t.code})</option>
+                          ))}
+                        </>
+                      )}
+                    </select>
+
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-medium">Allocated Days</label>
+                    <input
+                      type="number"
+                      value={allocateDays}
+                      onChange={(e) => setAllocateDays(Number(e.target.value))}
+                      className="w-full px-2 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-955 text-slate-750 dark:text-slate-300 text-xs focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-medium">Carried Forward</label>
+                    <input
+                      type="number"
+                      value={allocateCarried}
+                      onChange={(e) => setAllocateCarried(Number(e.target.value))}
+                      className="w-full px-2 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-955 text-slate-755 dark:text-slate-300 text-xs focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-medium">Year</label>
+                    <input
+                      type="number"
+                      value={allocateYear}
+                      onChange={(e) => setAllocateYear(Number(e.target.value))}
+                      className="w-full px-2 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-955 text-slate-755 dark:text-slate-300 text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllocateForm(false)}
+                    className="px-3 py-1.5 border rounded-lg font-bold hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-550"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={allocateMutation.isPending}
+                    className="px-3 py-1.5 bg-primary text-white rounded-lg font-bold shadow-md shadow-primary/10 transition-all hover:scale-102"
+                  >
+                    {allocateMutation.isPending ? "Saving..." : "Save Allocation"}
+                  </button>
+                </div>
+              </form>
+            )}
+
             {loadingAllocations ? (
               <div className="grid grid-cols-3 gap-4">
                 {[1, 2, 3].map(n => (
@@ -388,7 +738,8 @@ export const Leave: React.FC = () => {
                   const total = alloc.allocated + alloc.carriedForward;
                   const available = total - (alloc.used + alloc.pending);
                   return (
-                    <div key={alloc.id} className="p-4 border rounded-xl bg-slate-50 dark:bg-slate-955">
+                    <div key={alloc.id} className="p-4 border rounded-xl bg-slate-50 dark:bg-slate-955 relative group overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1.5 h-full bg-primary" />
                       <span className="text-slate-450 font-bold uppercase block text-[10px]">{alloc.leaveType?.name}</span>
                       <p className="text-lg font-black mt-1 text-slate-800 dark:text-white">
                         {available} / {total} Days Available
@@ -404,7 +755,7 @@ export const Leave: React.FC = () => {
             )}
 
             <div className="pt-4 space-y-3">
-              <span className="font-bold text-slate-800 dark:text-white text-xs block">My Leave Request Log</span>
+              <span className="font-bold text-slate-800 dark:text-white text-xs block">Leave Request Log ({activeUser.name})</span>
               {loadingRequests ? (
                 <div className="space-y-2">
                   {[1, 2].map(n => (
@@ -412,7 +763,7 @@ export const Leave: React.FC = () => {
                   ))}
                 </div>
               ) : allRequests.filter(r => r.employeeId === activeUser.id).length === 0 ? (
-                <p className="text-slate-400 text-center py-6">You have not submitted any leave requests yet.</p>
+                <p className="text-slate-400 text-center py-6">No leave requests submitted for this employee.</p>
               ) : (
                 allRequests.filter(r => r.employeeId === activeUser.id).map((req) => {
                   const startStr = new Date(req.startDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -467,8 +818,8 @@ export const Leave: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 animate-fade-in text-xs">
           <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex items-center justify-between">
             <span>Pending Team Leave Requests</span>
-            <span className="bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold">
-              {allRequests.filter(r => r.status === 'PENDING').length} Pending
+            <span className="bg-amber-100 text-amber-800 dark:bg-amber-955/50 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-bold">
+              {pendingRequests.length} Pending
             </span>
           </h3>
 
@@ -479,10 +830,10 @@ export const Leave: React.FC = () => {
                   <div key={n} className="h-16 w-full bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse" />
                 ))}
               </div>
-            ) : allRequests.filter(r => r.status === 'PENDING').length === 0 ? (
+            ) : pendingRequests.length === 0 ? (
               <p className="text-slate-400 text-center py-6">All leave applications have been processed.</p>
             ) : (
-              allRequests.filter(r => r.status === 'PENDING').map((req) => {
+              pendingRequests.map((req) => {
                 const startStr = new Date(req.startDate).toLocaleDateString();
                 const endStr = new Date(req.endDate).toLocaleDateString();
                 const appliedStr = new Date(req.appliedDate).toLocaleDateString();
@@ -530,8 +881,8 @@ export const Leave: React.FC = () => {
                 );
               })
             )}
-            </div>
           </div>
+        </div>
       )}
 
       {/* ======================================= */}
@@ -614,11 +965,13 @@ export const Leave: React.FC = () => {
       {activeSubModule === 'admin' && isAdmin && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in text-xs">
           
-          {/* Create Configuration Form */}
+          {/* Create/Edit Configuration Form */}
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-1">
-            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Add New Leave Type</h3>
+            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">
+              {editingType ? `Edit Leave Type: ${editingType.name}` : "Add New Leave Type"}
+            </h3>
             
-            <form onSubmit={handleCreateLeaveType} className="space-y-4">
+            <form onSubmit={handleSaveLeaveType} className="space-y-4">
               <div className="space-y-1">
                 <label className="text-slate-400 font-medium">Leave Type Name</label>
                 <input 
@@ -690,13 +1043,26 @@ export const Leave: React.FC = () => {
                 </div>
               )}
 
-              <button 
-                type="submit" 
-                disabled={createTypeMutation.isPending}
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md shadow-indigo-600/10 hover:scale-105 transition-all disabled:opacity-50"
-              >
-                {createTypeMutation.isPending ? "Creating..." : "Save Configuration"}
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  type="submit" 
+                  disabled={createTypeMutation.isPending || updateTypeMutation.isPending}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md shadow-indigo-600/10 hover:scale-105 transition-all disabled:opacity-50"
+                >
+                  {createTypeMutation.isPending || updateTypeMutation.isPending 
+                    ? "Saving..." 
+                    : editingType ? "Update Configuration" : "Save Configuration"}
+                </button>
+                {editingType && (
+                  <button 
+                    type="button" 
+                    onClick={handleCancelEdit}
+                    className="py-2.5 px-4 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 text-slate-750 dark:text-slate-300 rounded-xl font-bold transition-all hover:scale-105"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
             </form>
           </div>
 
@@ -718,14 +1084,23 @@ export const Leave: React.FC = () => {
                     </p>
                   </div>
                   
-                  <button 
-                    onClick={() => handleDeleteType(type.id, type.name)}
-                    disabled={deleteTypeMutation.isPending}
-                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-all"
-                    title="Deactivate or Delete"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button 
+                      onClick={() => startEditingType(type)}
+                      className="p-2 text-primary hover:bg-slate-100 dark:hover:bg-slate-850 rounded-lg transition-all"
+                      title="Edit Configuration"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteType(type.id, type.name)}
+                      disabled={deleteTypeMutation.isPending}
+                      className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-all"
+                      title="Deactivate or Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

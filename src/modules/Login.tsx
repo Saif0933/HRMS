@@ -1,6 +1,6 @@
-import { AlertCircle, ArrowRight, Landmark, Moon, Phone, RefreshCw, ShieldCheck, Sparkles, Sun } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
-import { useSendOtp, useVerifyOtp } from '../api/hook/useAuth';
+import { AlertCircle, ArrowRight, Landmark, Moon, Mail, Lock, RefreshCw, ShieldCheck, Sparkles, Sun, Eye, EyeOff } from 'lucide-react';
+import React, { useState } from 'react';
+import { useLogin } from '../api/hook/useAuth';
 import { useApp } from '../context/AppContext';
 
 export const Login: React.FC = () => {
@@ -13,30 +13,24 @@ export const Login: React.FC = () => {
     setTheme 
   } = useApp();
 
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
-  const [otp, setOtp] = useState<string[]>(Array(4).fill(''));
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [timer, setTimer] = useState(30);
-  const [canResend, setCanResend] = useState(false);
-  const [generatedOtp, setGeneratedOtp] = useState('1234');
   const [localLoading, setLocalLoading] = useState(false);
 
-  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  // TanStack Query Login Hook
+  const loginMutation = useLogin();
+  const loading = loginMutation.isPending || localLoading;
 
-  // TanStack Query Hooks
-  const sendOtpMutation = useSendOtp();
-  const verifyOtpMutation = useVerifyOtp();
-
-  const loading = sendOtpMutation.isPending || verifyOtpMutation.isPending || localLoading;
-
-  // Filter out a few interesting employees for quick-login shortcuts
+  // Filter out demo accounts for quick-login shortcuts
   const demoUsers = [
     {
       id: 'EMP005',
       name: 'Vikram Malhotra',
       role: 'Chief Executive Officer (Super Admin)',
-      phone: '9000011111',
+      email: 'ceo@symbosys.com',
+      password: '12345678',
       avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=120',
       systemRole: 'Super Admin' as const
     },
@@ -44,7 +38,8 @@ export const Login: React.FC = () => {
       id: 'EMP006',
       name: 'Karan Johar',
       role: 'HR Generalist (HR Admin)',
-      phone: '9811223344',
+      email: 'hr@symbosys.com',
+      password: '12345678',
       avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&q=80&w=120',
       systemRole: 'HR Admin' as const
     },
@@ -52,7 +47,8 @@ export const Login: React.FC = () => {
       id: 'EMP002',
       name: 'Neha Patel',
       role: 'Engineering Manager',
-      phone: '9823456789',
+      email: 'manager@symbosys.com',
+      password: '12345678',
       avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120',
       systemRole: 'Manager' as const
     },
@@ -60,84 +56,24 @@ export const Login: React.FC = () => {
       id: 'EMP001',
       name: 'Aarav Sharma',
       role: 'Senior UI Developer',
-      phone: '9876543210',
+      email: 'employee@symbosys.com',
+      password: '12345678',
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120',
       systemRole: 'Employee' as const
     }
   ];
 
-  // OTP Countdown timer
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (step === 'otp' && timer > 0) {
-      interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
-      }, 1000);
-    } else if (timer === 0) {
-      setCanResend(true);
-    }
-    return () => clearInterval(interval);
-  }, [step, timer]);
-
-  const handlePhoneSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const digitsOnly = phoneNumber.replace(/\D/g, '');
-    if (digitsOnly.length !== 10) {
-      setError('Please enter a valid 10-digit phone number.');
+    if (!email || !password) {
+      setError('Please fill in all fields.');
       return;
     }
 
-    sendOtpMutation.mutate(
-      { phone: digitsOnly },
-      {
-        onSuccess: (response) => {
-          setStep('otp');
-          setTimer(30);
-          setCanResend(false);
-          if (response.data?.otp) {
-            setGeneratedOtp(response.data.otp);
-          }
-        },
-        onError: (err: any) => {
-          setError(err.message || 'Failed to send OTP. Please try again.');
-        },
-      }
-    );
-  };
-
-  const handleOtpChange = (value: string, index: number) => {
-    if (isNaN(Number(value))) return;
-    const newOtp = [...otp];
-    newOtp[index] = value.substring(value.length - 1);
-    setOtp(newOtp);
-
-    // Move to next box if typed
-    if (value && index < 3) {
-      otpRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleOtpSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    const otpCode = otp.join('');
-
-    if (otpCode.length !== 4) {
-      setError('Please enter the full 4-digit verification code.');
-      return;
-    }
-
-    const digitsOnly = phoneNumber.replace(/\D/g, '');
-    verifyOtpMutation.mutate(
-      { phone: digitsOnly, otp: otpCode },
+    loginMutation.mutate(
+      { email, password },
       {
         onSuccess: (response) => {
           const loggedUser = response.data?.user;
@@ -154,14 +90,11 @@ export const Login: React.FC = () => {
             }
 
             // Find corresponding employee from mock lists/state, or create one:
-            const matchedEmployee = employees.find(emp => {
-              const cleanEmpPhone = emp.phone.replace(/\D/g, '');
-              return cleanEmpPhone.endsWith(digitsOnly);
-            }) || {
+            const matchedEmployee = employees.find(emp => emp.email?.toLowerCase() === loggedUser.email?.toLowerCase()) || {
               id: loggedUser.id,
-              name: loggedUser.name || 'New Employee',
+              name: loggedUser.name || 'New User',
               email: loggedUser.email || '',
-              phone: loggedUser.phone,
+              phone: loggedUser.phone || '',
               role: role,
               department: 'Engineering',
               avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120',
@@ -185,54 +118,63 @@ export const Login: React.FC = () => {
           }
         },
         onError: (err: any) => {
-          setError(err.message || 'Invalid OTP code. Please try again.');
+          setError(err.response?.data?.message || err.message || 'Invalid email or password. Please try again.');
         },
       }
     );
   };
 
   const selectDemoUser = (user: typeof demoUsers[0]) => {
-    setPhoneNumber(user.phone);
+    setEmail(user.email);
+    setPassword(user.password);
     setError('');
     setLocalLoading(true);
 
-    sendOtpMutation.mutate(
-      { phone: user.phone },
+    loginMutation.mutate(
+      { email: user.email, password: user.password },
       {
         onSuccess: (response) => {
           setLocalLoading(false);
-          setStep('otp');
-          setTimer(30);
-          setCanResend(false);
-          const backendOtp = response.data?.otp || '1234';
-          setGeneratedOtp(backendOtp);
-          setOtp(backendOtp.split(''));
-        },
-        onError: (err: any) => {
-          setLocalLoading(false);
-          setError(err.message || 'Failed to initialize demo login.');
-        },
-      }
-    );
-  };
+          const loggedUser = response.data?.user;
+          if (loggedUser) {
+            let role: 'Super Admin' | 'HR Admin' | 'Manager' | 'Employee' = 'Employee';
+            const dbRole = loggedUser.role;
+            if (dbRole === 'SUPER_ADMIN' || dbRole === 'SUPER ADMIN' || loggedUser.name === 'Vikram Malhotra') {
+              role = 'Super Admin';
+            } else if (dbRole === 'HR_ADMIN' || dbRole === 'HR ADMIN' || loggedUser.name === 'Karan Johar' || loggedUser.name === 'Shalini Sen') {
+              role = 'HR Admin';
+            } else if (dbRole === 'MANAGER' || dbRole === 'Manager') {
+              role = 'Manager';
+            }
 
-  const resendOtp = () => {
-    setError('');
-    const digitsOnly = phoneNumber.replace(/\D/g, '');
-    sendOtpMutation.mutate(
-      { phone: digitsOnly },
-      {
-        onSuccess: (response) => {
-          setTimer(30);
-          setCanResend(false);
-          setOtp(Array(6).fill(''));
-          otpRefs.current[0]?.focus();
-          if (response.data?.otp) {
-            setGeneratedOtp(response.data.otp);
+            const matchedEmployee = employees.find(emp => emp.email?.toLowerCase() === loggedUser.email?.toLowerCase()) || {
+              id: loggedUser.id,
+              name: loggedUser.name || 'New User',
+              email: loggedUser.email || '',
+              phone: loggedUser.phone || '',
+              role: role,
+              department: 'Engineering',
+              avatar: user.avatar,
+              status: 'Active' as const,
+              joiningDate: new Date().toISOString().split('T')[0],
+              location: 'Mumbai',
+              manager: 'Neha Patel',
+              basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
+              bankName: '', bankAccount: '', ifsc: '', pan: '', aadhaar: '', uan: '', pfNumber: '',
+              gender: 'Male', dob: '1995-01-01', bloodGroup: 'O+', maritalStatus: 'Single',
+              qualification: '', university: '', passingYear: '', pastCompanies: [],
+              promotions: [], transfers: [], assets: [],
+              probationDuration: '6 Months', probationEnd: '', confirmationStatus: 'Confirmed' as const
+            };
+
+            setCurrentUser(matchedEmployee as any);
+            setUserRole(role);
+            setIsAuthenticated(true);
           }
         },
         onError: (err: any) => {
-          setError(err.message || 'Failed to resend OTP. Please try again.');
+          setLocalLoading(false);
+          setError(err.response?.data?.message || err.message || 'Failed to initialize demo login.');
         },
       }
     );
@@ -287,7 +229,7 @@ export const Login: React.FC = () => {
             </h1>
             
             <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md leading-relaxed">
-              Verify your identity using your registered mobile number. Fast, passwordless, and secured with industry-grade multi-factor security protocols.
+              Sign in to access your customized HRMS workspace, view payslips, claim expense reimbursements, apply for leaves, and collaborate with your team.
             </p>
 
             <div className="grid grid-cols-2 gap-4 mt-2">
@@ -309,12 +251,10 @@ export const Login: React.FC = () => {
               {/* Form header */}
               <div className="mb-6">
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                  {step === 'phone' ? 'Welcome Back' : 'Security Verification'}
+                  Welcome Back
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  {step === 'phone' 
-                    ? 'Enter your mobile number to receive a verification OTP' 
-                    : `We sent a 4-digit OTP code to +91 ${phoneNumber}`}
+                  Enter your organization email and password to log in.
                 </p>
               </div>
 
@@ -326,140 +266,75 @@ export const Login: React.FC = () => {
                 </div>
               )}
 
-              {/* OTP Hint Banner (Extremely helpful for development/testing) */}
-              {step === 'otp' && (
-                <div className="mb-5 p-3 bg-primary/10 border border-primary/20 rounded-xl text-primary text-xs flex items-center justify-between font-medium animate-fade-in">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4" />
-                    <span>Your verification OTP code is:</span>
+              {/* Email / Password Form */}
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="email-input" className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="email-input"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@company.com"
+                      className="w-full pl-10 pr-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 dark:text-white"
+                      disabled={loading}
+                    />
+                    <Mail className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-400 dark:text-slate-500" />
                   </div>
-                  <span className="bg-primary text-white font-mono px-2 py-0.5 rounded text-sm tracking-wider font-bold">
-                    {generatedOtp}
-                  </span>
                 </div>
-              )}
 
-              {/* Step 1: Phone Input Form */}
-              {step === 'phone' && (
-                <form onSubmit={handlePhoneSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <label htmlFor="phone-input" className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                      Mobile Number
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="password-input" className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                      Password
                     </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-medium text-sm">
-                        +91
-                      </div>
-                      <input
-                        id="phone-input"
-                        type="tel"
-                        maxLength={10}
-                        required
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').substring(0, 10))}
-                        placeholder="Enter 10-digit number"
-                        className="w-full pl-12 pr-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 dark:text-white"
-                        disabled={loading}
-                      />
-                      <Phone className="absolute right-3.5 top-3.5 h-4.5 w-4.5 text-slate-400 dark:text-slate-500" />
-                    </div>
                   </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading || phoneNumber.length !== 10}
-                    className="w-full bg-primary hover:bg-primary/95 text-white py-3 px-4 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 hover:shadow-primary/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none hover:translate-y-[-1px] active:translate-y-[0px]"
-                    id="send-otp-btn"
-                  >
-                    {loading ? (
-                      <>
-                        <RefreshCw className="h-4.5 w-4.5 animate-spin" />
-                        Sending verification SMS...
-                      </>
-                    ) : (
-                      <>
-                        Get Verification OTP
-                        <ArrowRight className="h-4.5 w-4.5" />
-                      </>
-                    )}
-                  </button>
-                </form>
-              )}
-
-              {/* Step 2: OTP Verification Form */}
-              {step === 'otp' && (
-                <form onSubmit={handleOtpSubmit} className="space-y-5">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
-                      4-Digit Security Code
-                    </label>
-                    <div className="flex gap-2 justify-between">
-                      {otp.map((digit, idx) => (
-                        <input
-                          key={idx}
-                          type="text"
-                          maxLength={1}
-                          pattern="[0-9]*"
-                          value={digit}
-                          ref={(el) => (otpRefs.current[idx] = el)}
-                          onChange={(e) => handleOtpChange(e.target.value, idx)}
-                          onKeyDown={(e) => handleKeyDown(e, idx)}
-                          className="w-11 h-12 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-center text-lg font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                          disabled={loading}
-                          id={`otp-field-${idx}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="relative">
+                    <input
+                      id="password-input"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-10 pr-10 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-900 dark:text-white"
+                      disabled={loading}
+                    />
+                    <Lock className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-400 dark:text-slate-500" />
+                    
                     <button
                       type="button"
-                      onClick={() => {
-                        setStep('phone');
-                        setOtp(Array(4).fill(''));
-                        setError('');
-                      }}
-                      className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-semibold hover:underline"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650 transition-colors"
                     >
-                      Change Number
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
-
-                    {canResend ? (
-                      <button
-                        type="button"
-                        onClick={resendOtp}
-                        className="text-primary font-bold hover:underline"
-                      >
-                        Resend OTP code
-                      </button>
-                    ) : (
-                      <span className="text-slate-400 font-medium">
-                        Resend code in {timer}s
-                      </span>
-                    )}
                   </div>
+                </div>
 
-                  <button
-                    type="submit"
-                    disabled={loading || otp.join('').length !== 4}
-                    className="w-full bg-primary hover:bg-primary/95 text-white py-3 px-4 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 hover:shadow-primary/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none hover:translate-y-[-1px] active:translate-y-[0px]"
-                    id="verify-otp-btn"
-                  >
-                    {loading ? (
-                      <>
-                        <RefreshCw className="h-4.5 w-4.5 animate-spin" />
-                        Verifying credentials...
-                      </>
-                    ) : (
-                      <>
-                        Verify & Access HRMS
-                        <ShieldCheck className="h-4.5 w-4.5" />
-                      </>
-                    )}
-                  </button>
-                </form>
-              )}
+                <button
+                  type="submit"
+                  disabled={loading || !email || !password}
+                  className="w-full bg-primary hover:bg-primary/95 text-white py-3 px-4 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 hover:shadow-primary/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none hover:translate-y-[-1px] active:translate-y-[0px]"
+                  id="login-btn"
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw className="h-4.5 w-4.5 animate-spin" />
+                      Signing in...
+                    </>
+                  ) : (
+                    <>
+                      Sign In to HRMS
+                      <ArrowRight className="h-4.5 w-4.5" />
+                    </>
+                  )}
+                </button>
+              </form>
             </div>
 
             {/* Quick Demo Accounts Selector (Bottom) */}
@@ -498,7 +373,7 @@ export const Login: React.FC = () => {
 
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] bg-slate-100 dark:bg-slate-850 px-2 py-1 rounded-lg text-slate-500 dark:text-slate-400 font-mono font-semibold">
-                        +91 {user.phone.substring(0, 5)} {user.phone.substring(5)}
+                        {user.email}
                       </span>
                       <ArrowRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                     </div>
