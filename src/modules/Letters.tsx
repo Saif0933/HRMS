@@ -1,12 +1,27 @@
-import {
-    Download,
-    FileSignature
-} from 'lucide-react';
 import React, { useState } from 'react';
+import {
+  Download,
+  FileSignature,
+  FileText,
+  Calendar,
+  Layers,
+  ChevronRight
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import {
+  useIssuedLetters,
+  useIssueLetter,
+  IssuedLetter
+} from '../api/hook/useLetters';
 
 export const Letters: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog, employees } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog } = useApp();
+
+  // Queries & Mutations
+  const { data: lettersRes, isLoading: logsLoading } = useIssuedLetters();
+  const lettersList = lettersRes?.data || [];
+
+  const issueLetterMut = useIssueLetter();
 
   const [selectedTemplate, setSelectedTemplate] = useState<'offer' | 'warning' | 'experience'>('offer');
 
@@ -19,12 +34,29 @@ export const Letters: React.FC = () => {
 
   const handleIssueLetter = (e: React.FormEvent) => {
     e.preventDefault();
-    addAuditLog(
-      "Issued Corporate Letter", 
-      "Letters Center", 
-      `Generated and dispatched ${selectedTemplate} letter to ${recipientName} (${recipientRole})`
-    );
-    alert(`Letter successfully generated and dispatched to ${recipientName} via email!`);
+    
+    issueLetterMut.mutate({
+      templateType: selectedTemplate,
+      recipientName,
+      recipientRole,
+      joiningDate: selectedTemplate === 'offer' ? joiningDate : null,
+      salaryCtc: selectedTemplate === 'offer' ? salaryCtc : null,
+      warningReason: selectedTemplate === 'warning' ? warningReason : null,
+    }, {
+      onSuccess: () => {
+        addAuditLog(
+          "Issued Corporate Letter", 
+          "Letters Center", 
+          `Generated and dispatched ${selectedTemplate} letter to ${recipientName} (${recipientRole})`
+        );
+        alert(`Letter successfully generated and logged in the database!`);
+        // Navigate to the logs tab
+        setActiveSubModule('issued-log');
+      },
+      onError: (err: any) => {
+        alert(err?.response?.data?.message || err.message || "Failed to generate letter");
+      }
+    });
   };
 
   return (
@@ -41,6 +73,16 @@ export const Letters: React.FC = () => {
           }`}
         >
           Generate Corporate Letter
+        </button>
+        <button 
+          onClick={() => setActiveSubModule('issued-log')}
+          className={`py-3 px-5 text-sm font-semibold border-b-2 transition-all ${
+            activeSubModule === 'issued-log' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          Issued Letters History
         </button>
       </div>
 
@@ -125,9 +167,10 @@ export const Letters: React.FC = () => {
 
               <button 
                 type="submit" 
-                className="w-full py-2 bg-primary text-white rounded-xl font-bold shadow-md shadow-primary/10 hover:scale-105 transition-all"
+                disabled={issueLetterMut.isPending}
+                className="w-full py-2 bg-primary text-white rounded-xl font-bold shadow-md shadow-primary/10 hover:scale-105 transition-all disabled:opacity-50"
               >
-                Issue & Send via Email
+                {issueLetterMut.isPending ? "Generating..." : "Issue & Log Record"}
               </button>
             </form>
           </div>
@@ -138,7 +181,7 @@ export const Letters: React.FC = () => {
               <span className="text-slate-400 font-bold uppercase text-[10px]">Real-Time Document Preview</span>
               <button 
                 onClick={() => alert("Downloading letter PDF...")}
-                className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-350 rounded-lg hover:bg-primary hover:text-white transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-355 rounded-lg hover:bg-primary hover:text-white transition-colors"
               >
                 <Download className="h-3.5 w-3.5" />
                 Download PDF
@@ -208,6 +251,55 @@ export const Letters: React.FC = () => {
 
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ======================================= */}
+      {/* 2. ISSUED LETTERS LEDGER                 */}
+      {/* ======================================= */}
+      {activeSubModule === 'issued-log' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 animate-fade-in text-xs">
+          <div>
+            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Issued Corporate Documents</h3>
+            <p className="text-slate-400 mt-1">Audit log of all issued offer letters, certificates, and disciplinary warning memos.</p>
+          </div>
+
+          {logsLoading ? (
+            <div className="py-8 text-center text-slate-400 font-medium">Loading issue history...</div>
+          ) : lettersList.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 font-medium">No corporate letters issued yet.</div>
+          ) : (
+            <div className="space-y-3">
+              {lettersList.map((letter) => (
+                <div key={letter.id} className="p-3.5 border border-slate-150 dark:border-slate-850 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-950/60">
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-8 w-8 text-primary shrink-0" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-850 dark:text-white">{letter.recipientName}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider ${
+                          letter.templateType === 'offer' ? 'bg-green-100 text-green-800' :
+                          letter.templateType === 'warning' ? 'bg-rose-100 text-rose-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          {letter.templateType} Letter
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-450 mt-1">Role: {letter.recipientRole} • Issued On: {new Date(letter.createdAt).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => alert(`Re-downloading PDF for ${letter.recipientName}...`)}
+                    className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg hover:scale-105 transition-all text-slate-500"
+                    title="Download Letter"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

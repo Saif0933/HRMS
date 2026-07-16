@@ -1,29 +1,24 @@
-import React, { useState, useEffect } from 'react';
 import {
-  Star,
-  Plus,
   Award,
-  TrendingUp,
-  UserCheck,
+  ListTodo,
   MessageSquare,
-  Calendar,
-  ChevronRight,
-  Percent,
-  CheckCircle2,
-  ListTodo
+  Plus,
+  Star,
+  UserCheck
 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { useApp } from '../context/AppContext';
 import { useEmployees } from '../api/hook/useEmployee';
 import {
-  useGoals,
-  useCreateGoal,
-  useUpdateGoalProgress,
-  useFeedbacks,
-  useCreateFeedback,
   useBellCurveDistribution,
-  useSaveAppraisal
+  useCreateFeedback,
+  useCreateGoal,
+  useFeedbacks,
+  useGoals,
+  useSaveAppraisal,
+  useUpdateGoalProgress
 } from '../api/hook/usePerformance';
+import { useApp } from '../context/AppContext';
 
 export const Performance: React.FC = () => {
   const { activeSubModule, setActiveSubModule, addAuditLog, userRole } = useApp();
