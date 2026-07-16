@@ -1,60 +1,65 @@
-import {
-    ArrowRight
-} from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { ArrowRight, UserCheck, Briefcase, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-
-interface Candidate {
-  id: string;
-  name: string;
-  role: string;
-  experience: string;
-  email: string;
-  stage: 'Applied' | 'Interview' | 'Offer' | 'Onboarding';
-}
+import {
+  useJobs,
+  useCreateJob,
+  useCandidates,
+  useAdvanceCandidate,
+  useUpdateCandidateChecklist,
+  useRejectCandidate,
+  Candidate
+} from '../api/hook/useRecruitment';
 
 export const Recruitment: React.FC = () => {
   const { activeSubModule, setActiveSubModule, addAuditLog } = useApp();
 
-  // Job Requisitions State
-  const [jobs, setJobs] = useState([
-    { id: "JOB001", title: "Senior React Developer", department: "Engineering", status: "Open", applicants: 18 },
-    { id: "JOB002", title: "Lead UX UI Designer", department: "Design", status: "Open", applicants: 9 },
-    { id: "JOB003", title: "HR Generalist Manager", department: "Human Resources", status: "Filled", applicants: 24 }
-  ]);
+  // Queries
+  const { data: jobsRes, isLoading: jobsLoading } = useJobs();
+  const jobsList = jobsRes?.data || [];
 
-  // Candidate pipeline state
-  const [candidates, setCandidates] = useState<Candidate[]>([
-    { id: "CAN091", name: "Rishi Kumar", role: "Senior React Developer", experience: "5 Years", email: "rishi@gmail.com", stage: "Applied" },
-    { id: "CAN092", name: "Pooja Hegde", role: "Lead UX UI Designer", experience: "8 Years", email: "pooja@design.io", stage: "Interview" },
-    { id: "CAN093", name: "Amit Shah", role: "Senior React Developer", experience: "4 Years", email: "amit.shah@dev.net", stage: "Offer" },
-    { id: "CAN094", name: "Karan Johar", role: "HR Generalist Manager", experience: "6 Years", email: "karan@hrms.co", stage: "Onboarding" }
-  ]);
+  const { data: candidatesRes, isLoading: candidatesLoading } = useCandidates();
+  const candidatesList = candidatesRes?.data || [];
 
-  // Pre-onboarding checklist
-  const [bgvChecked, setBgvChecked] = useState(false);
-  const [contractSigned, setContractSigned] = useState(false);
-  const [hardwareAssigned, setHardwareAssigned] = useState(false);
+  // Mutations
+  const createJobMut = useCreateJob();
+  const advanceCandidateMut = useAdvanceCandidate();
+  const updateChecklistMut = useUpdateCandidateChecklist();
+  const rejectCandidateMut = useRejectCandidate();
 
   // New Job Requisition Form State
   const [newJobTitle, setNewJobTitle] = useState('');
   const [newJobDept, setNewJobDept] = useState('Engineering');
 
+  // Pre-onboarding selected candidate state
+  const onboardingCandidates = candidatesList.filter(c => c.stage === 'Onboarding');
+  const [selectedOnboardId, setSelectedOnboardId] = useState('');
+
+  useEffect(() => {
+    if (onboardingCandidates.length > 0 && !selectedOnboardId) {
+      setSelectedOnboardId(onboardingCandidates[0].id);
+    }
+  }, [onboardingCandidates, selectedOnboardId]);
+
+  const activeOnboardCandidate = onboardingCandidates.find(c => c.id === selectedOnboardId);
+
   const handleCreateRequisition = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newJobTitle.trim()) return;
 
-    const newJob = {
-      id: `JOB0${jobs.length + 1}`,
+    createJobMut.mutate({
       title: newJobTitle,
       department: newJobDept,
-      status: "Open",
-      applicants: 0
-    };
-    setJobs(prev => [...prev, newJob]);
-    addAuditLog("Created Job Requisition", "Recruitment & ATS", `Opened new position: ${newJobTitle} in ${newJobDept} team`);
-    alert(`Job requisition for "${newJobTitle}" created successfully!`);
-    setNewJobTitle('');
+    }, {
+      onSuccess: () => {
+        addAuditLog("Created Job Requisition", "Recruitment & ATS", `Opened new position: ${newJobTitle} in ${newJobDept} team`);
+        alert(`Job requisition for "${newJobTitle}" created successfully!`);
+        setNewJobTitle('');
+      },
+      onError: (err: any) => {
+        alert(err?.response?.data?.message || err.message || "Failed to create requisition");
+      }
+    });
   };
 
   const handleAdvanceCandidate = (id: string, currentStage: Candidate['stage'], name: string) => {
@@ -65,16 +70,43 @@ export const Recruitment: React.FC = () => {
       'Onboarding': 'Onboarding'
     };
 
-    setCandidates(prev => prev.map(c => 
-      c.id === id ? { ...c, stage: nextStages[currentStage] } : c
-    ));
-    addAuditLog("ATS Stage Shifted", "Recruitment & ATS", `Moved candidate ${name} to stage ${nextStages[currentStage]}`);
+    const nextStage = nextStages[currentStage];
+    advanceCandidateMut.mutate({ id, stage: nextStage }, {
+      onSuccess: () => {
+        addAuditLog("ATS Stage Shifted", "Recruitment & ATS", `Moved candidate ${name} to stage ${nextStage}`);
+      },
+      onError: (err: any) => {
+        alert(err?.response?.data?.message || err.message || "Failed to advance candidate");
+      }
+    });
   };
 
   const handleRejectCandidate = (id: string, name: string) => {
-    setCandidates(prev => prev.filter(c => c.id !== id));
-    addAuditLog("Candidate Rejected", "Recruitment & ATS", `Rejected candidate ${name} from applicant pipeline`);
-    alert(`Candidate ${name} archived from recruitment track.`);
+    rejectCandidateMut.mutate(id, {
+      onSuccess: () => {
+        addAuditLog("Candidate Rejected", "Recruitment & ATS", `Rejected candidate ${name} from applicant pipeline`);
+        alert(`Candidate ${name} archived from recruitment track.`);
+      },
+      onError: (err: any) => {
+        alert(err?.response?.data?.message || err.message || "Failed to reject candidate");
+      }
+    });
+  };
+
+  const handleChecklistChange = (field: 'bgvChecked' | 'contractSigned' | 'hardwareAssigned', checked: boolean) => {
+    if (!activeOnboardCandidate) return;
+
+    updateChecklistMut.mutate({
+      id: activeOnboardCandidate.id,
+      [field]: checked
+    });
+  };
+
+  const handleGenerateLogin = () => {
+    if (!activeOnboardCandidate) return;
+
+    alert(`Triggering login creation for ${activeOnboardCandidate.name}! Credentials sent to ${activeOnboardCandidate.email}.`);
+    addAuditLog("Onboarding Checklist Approved", "Recruitment & ATS", `Approved pre-onboarding checks for candidate ${activeOnboardCandidate.name}`);
   };
 
   return (
@@ -122,7 +154,10 @@ export const Recruitment: React.FC = () => {
           
           {/* Create Job Requisition */}
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-1">
-            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Raise Job Requisition</h3>
+            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex items-center gap-1.5">
+              <Briefcase className="h-4.5 w-4.5 text-primary" />
+              <span>Raise Job Requisition</span>
+            </h3>
             
             <form onSubmit={handleCreateRequisition} className="space-y-4">
               <div className="space-y-1">
@@ -153,9 +188,10 @@ export const Recruitment: React.FC = () => {
 
               <button 
                 type="submit" 
-                className="w-full py-2 bg-primary text-white rounded-xl font-bold hover:scale-105 transition-all shadow-md shadow-primary/10"
+                disabled={createJobMut.isPending}
+                className="w-full py-2 bg-primary text-white rounded-xl font-bold hover:scale-105 transition-all shadow-md shadow-primary/10 disabled:opacity-50"
               >
-                Create Job Requisition
+                {createJobMut.isPending ? "Creating..." : "Create Job Requisition"}
               </button>
             </form>
           </div>
@@ -164,24 +200,30 @@ export const Recruitment: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-2">
             <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Active Openings Board</h3>
             
-            <div className="space-y-3.5">
-              {jobs.map((job) => (
-                <div key={job.id} className="p-3 border rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-950">
-                  <div>
-                    <span className="font-bold text-slate-850 dark:text-white text-xs">{job.title}</span>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">{job.department} • {job.applicants} Applicants applied</span>
+            {jobsLoading ? (
+              <div className="py-8 text-center text-slate-400 font-medium">Loading requisitions...</div>
+            ) : jobsList.length === 0 ? (
+              <div className="py-8 text-center text-slate-400 font-medium">No job requisitions created yet.</div>
+            ) : (
+              <div className="space-y-3.5">
+                {jobsList.map((job) => (
+                  <div key={job.id} className="p-3 border border-slate-150 dark:border-slate-850 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-950">
+                    <div>
+                      <span className="font-bold text-slate-850 dark:text-white text-xs">{job.title}</span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">{job.department} • {job.applicants} Applicants applied</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                        job.status === 'Open' ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300' : 'bg-slate-200 dark:bg-slate-855 text-slate-500'
+                      }`}>
+                        {job.status}
+                      </span>
+                    </div>
                   </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                      job.status === 'Open' ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300' : 'bg-slate-200 dark:bg-slate-850 text-slate-500'
-                    }`}>
-                      {job.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -196,47 +238,53 @@ export const Recruitment: React.FC = () => {
             <p className="text-slate-400 mt-1">Advance applicants through hiring steps from application to final pre-onboarding checks.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {(['Applied', 'Interview', 'Offer', 'Onboarding'] as const).map((stage) => (
-              <div key={stage} className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-250 dark:border-slate-800 space-y-4 min-h-96">
-                <div className="flex items-center justify-between border-b pb-2">
-                  <span className="font-extrabold text-slate-800 dark:text-slate-200 uppercase">{stage}</span>
-                  <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    {candidates.filter(c => c.stage === stage).length}
-                  </span>
-                </div>
+          {candidatesLoading ? (
+            <div className="py-12 text-center text-slate-400 font-medium">Loading applicant track...</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {(['Applied', 'Interview', 'Offer', 'Onboarding'] as const).map((stage) => (
+                <div key={stage} className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-850 space-y-4 min-h-[380px]">
+                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                    <span className="font-extrabold text-slate-800 dark:text-slate-200 uppercase">{stage}</span>
+                    <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      {candidatesList.filter(c => c.stage === stage).length}
+                    </span>
+                  </div>
 
-                <div className="space-y-3">
-                  {candidates.filter(c => c.stage === stage).map((c) => (
-                    <div key={c.id} className="p-3 bg-white dark:bg-slate-900 border rounded-xl space-y-2.5 shadow-sm">
-                      <div>
-                        <h4 className="font-bold text-slate-850 dark:text-white leading-tight">{c.name}</h4>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{c.role} • {c.experience}</p>
-                      </div>
+                  <div className="space-y-3">
+                    {candidatesList.filter(c => c.stage === stage).map((c) => (
+                      <div key={c.id} className="p-3 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-850 rounded-xl space-y-2.5 shadow-sm">
+                        <div>
+                          <h4 className="font-bold text-slate-850 dark:text-white leading-tight">{c.name}</h4>
+                          <p className="text-[10px] text-slate-400 mt-0.5">{c.role} • {c.experience}</p>
+                        </div>
 
-                      <div className="flex justify-between border-t pt-2 mt-2 gap-1.5">
-                        <button 
-                          onClick={() => handleRejectCandidate(c.id, c.name)}
-                          className="px-2 py-1 border border-slate-200 dark:border-slate-850 text-rose-500 rounded-lg font-bold"
-                        >
-                          Reject
-                        </button>
-                        {stage !== 'Onboarding' && (
+                        <div className="flex justify-between border-t border-slate-100 dark:border-slate-800 pt-2 mt-2 gap-1.5">
                           <button 
-                            onClick={() => handleAdvanceCandidate(c.id, c.stage, c.name)}
-                            className="px-2 py-1 bg-primary text-white rounded-lg font-bold flex items-center gap-0.5"
+                            onClick={() => handleRejectCandidate(c.id, c.name)}
+                            disabled={rejectCandidateMut.isPending}
+                            className="px-2 py-1 border border-slate-200 dark:border-slate-800 text-rose-500 rounded-lg font-bold disabled:opacity-50"
                           >
-                            <span>Advance</span>
-                            <ArrowRight className="h-3 w-3" />
+                            Reject
                           </button>
-                        )}
+                          {stage !== 'Onboarding' && (
+                            <button 
+                              onClick={() => handleAdvanceCandidate(c.id, c.stage, c.name)}
+                              disabled={advanceCandidateMut.isPending}
+                              className="px-2 py-1 bg-primary text-white rounded-lg font-bold flex items-center gap-0.5 disabled:opacity-50"
+                            >
+                              <span>Advance</span>
+                              <ArrowRight className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -250,38 +298,78 @@ export const Recruitment: React.FC = () => {
             <p className="text-slate-400 mt-1">Complete mandatory verification checklists before activating employee logins.</p>
           </div>
 
-          <div className="p-4 bg-slate-50 dark:bg-slate-950 border rounded-xl space-y-4">
-            <div className="border-b pb-2 flex justify-between font-bold">
-              <span>Candidate: Karan Johar</span>
-              <span className="text-primary font-bold">Target Join: July 15</span>
+          {candidatesLoading ? (
+            <div className="py-8 text-center text-slate-400 font-medium">Loading onboarding data...</div>
+          ) : onboardingCandidates.length === 0 ? (
+            <div className="p-6 border border-dashed rounded-xl text-center text-slate-450 font-medium">
+              No candidates are currently in the Onboarding stage. Advance a candidate from Kanban to begin onboarding.
             </div>
+          ) : (
+            <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-850 rounded-xl space-y-4">
+              <div className="border-b border-slate-200 dark:border-slate-800 pb-3 flex flex-col sm:flex-row justify-between sm:items-center gap-2 font-bold">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">Candidate:</span>
+                  <select
+                    value={selectedOnboardId}
+                    onChange={(e) => setSelectedOnboardId(e.target.value)}
+                    className="px-2.5 py-1 border rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-bold focus:outline-none"
+                  >
+                    {onboardingCandidates.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <span className="text-primary font-bold">Target Join: July 15</span>
+              </div>
 
-            <div className="space-y-3.5">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={bgvChecked} onChange={(e) => setBgvChecked(e.target.checked)} className="rounded text-primary focus:ring-0" />
-                <span className="text-slate-705 dark:text-slate-250 font-medium">Background verification (BGV) checks clearance</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={contractSigned} onChange={(e) => setContractSigned(e.target.checked)} className="rounded text-primary focus:ring-0" />
-                <span className="text-slate-705 dark:text-slate-250 font-medium">Employment contract and non-disclosure agreement signed</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={hardwareAssigned} onChange={(e) => setHardwareAssigned(e.target.checked)} className="rounded text-primary focus:ring-0" />
-                <span className="text-slate-705 dark:text-slate-250 font-medium">IT asset provisioning (Laptop and credentials)</span>
-              </label>
+              {activeOnboardCandidate && (
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        checked={activeOnboardCandidate.bgvChecked} 
+                        onChange={(e) => handleChecklistChange('bgvChecked', e.target.checked)} 
+                        className="rounded text-primary focus:ring-0" 
+                      />
+                      <span className="text-slate-700 dark:text-slate-300 font-medium">Background verification (BGV) checks clearance</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        checked={activeOnboardCandidate.contractSigned} 
+                        onChange={(e) => handleChecklistChange('contractSigned', e.target.checked)} 
+                        className="rounded text-primary focus:ring-0" 
+                      />
+                      <span className="text-slate-700 dark:text-slate-300 font-medium">Employment contract and non-disclosure agreement signed</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        checked={activeOnboardCandidate.hardwareAssigned} 
+                        onChange={(e) => handleChecklistChange('hardwareAssigned', e.target.checked)} 
+                        className="rounded text-primary focus:ring-0" 
+                      />
+                      <span className="text-slate-700 dark:text-slate-300 font-medium">IT asset provisioning (Laptop and credentials)</span>
+                    </label>
+                  </div>
+
+                  <button 
+                    disabled={
+                      !activeOnboardCandidate.bgvChecked || 
+                      !activeOnboardCandidate.contractSigned || 
+                      !activeOnboardCandidate.hardwareAssigned
+                    }
+                    onClick={handleGenerateLogin}
+                    className="w-full py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold shadow-md shadow-green-500/10 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <UserCheck className="h-4.5 w-4.5" />
+                    <span>Generate Employee Login & Card</span>
+                  </button>
+                </div>
+              )}
             </div>
-
-            <button 
-              disabled={!bgvChecked || !contractSigned || !hardwareAssigned}
-              onClick={() => {
-                alert("Triggering final login creation...");
-                addAuditLog("Onboarding Checklist Approved", "Recruitment & ATS", "Approved pre-onboarding checks for candidate Karan Johar");
-              }}
-              className="w-full py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold shadow-md shadow-green-500/10 disabled:opacity-50"
-            >
-              Generate Employee Login & Card
-            </button>
-          </div>
+          )}
         </div>
       )}
 
