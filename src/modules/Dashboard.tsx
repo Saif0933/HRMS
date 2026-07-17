@@ -30,6 +30,7 @@ import {
   XAxis, YAxis
 } from 'recharts';
 import { useApp } from '../context/AppContext';
+import { useDashboardData } from '../api/hook/useDashboard';
 
 export const Dashboard: React.FC = () => {
   const { 
@@ -37,21 +38,24 @@ export const Dashboard: React.FC = () => {
     auditLogs, userRole, setActiveModule, setActiveSubModule, addAuditLog 
   } = useApp();
 
+  const { data: dashboardResponse } = useDashboardData();
+  const dbDashboard = dashboardResponse?.data;
+
   const [activeChartTab, setActiveChartTab] = useState<'attendance' | 'departments' | 'diversity'>('attendance');
 
   // KPI Calculations
-  const totalEmployees = employees.length;
-  const activeEmployees = employees.filter(e => e.status === 'Active').length;
-  const probationEmployees = employees.filter(e => e.status === 'Probation').length;
-  const leaveEmployees = employees.filter(e => e.status === 'On Leave').length;
-  const resignedEmployees = employees.filter(e => e.status === 'Resigned').length;
+  const totalEmployees = dbDashboard ? dbDashboard.kpis.totalEmployees : employees.length;
+  const activeEmployees = dbDashboard ? dbDashboard.kpis.activeEmployees : employees.filter(e => e.status === 'Active').length;
+  const probationEmployees = dbDashboard ? dbDashboard.kpis.probationEmployees : employees.filter(e => e.status === 'Probation').length;
+  const leaveEmployees = dbDashboard ? dbDashboard.kpis.leaveEmployees : employees.filter(e => e.status === 'On Leave').length;
+  const resignedEmployees = dbDashboard ? dbDashboard.kpis.resignedEmployees : employees.filter(e => e.status === 'Resigned').length;
 
-  const pendingLeaves = leaveRequests.filter(r => r.status === 'Pending');
-  const pendingClaims = claims.filter(c => c.status === 'Pending');
-  const pendingApprovalsCount = pendingLeaves.length + pendingClaims.length;
+  const pendingLeaves = dbDashboard ? dbDashboard.pendingApprovals.leaves : leaveRequests.filter(r => r.status === 'Pending');
+  const pendingClaims = dbDashboard ? dbDashboard.pendingApprovals.claims : claims.filter(c => c.status === 'Pending');
+  const pendingApprovalsCount = dbDashboard ? dbDashboard.kpis.pendingApprovalsCount : pendingLeaves.length + pendingClaims.length;
 
   // Chart Data
-  const attendanceTrendData = [
+  const attendanceTrendData = dbDashboard ? dbDashboard.attendanceTrend : [
     { name: 'Mon', Present: 98, Late: 2, Absent: 0 },
     { name: 'Tue', Present: 96, Late: 4, Absent: 0 },
     { name: 'Wed', Present: 95, Late: 3, Absent: 2 },
@@ -61,12 +65,14 @@ export const Dashboard: React.FC = () => {
   ];
 
   // Group by Department
-  const deptData = Object.entries(
+  const deptData = dbDashboard ? dbDashboard.departmentDistribution : Object.entries(
     employees.reduce((acc, emp) => {
       acc[emp.department] = (acc[emp.department] || 0) + 1;
       return acc;
     }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name, value }));
+
+  const dbAuditLogs = dbDashboard ? dbDashboard.auditLogs : auditLogs;
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444'];
 
@@ -258,8 +264,8 @@ export const Dashboard: React.FC = () => {
                     <PieChart>
                       <Pie
                         data={[
-                          { name: 'Male', value: employees.filter(e => e.gender === 'Male').length },
-                          { name: 'Female', value: employees.filter(e => e.gender === 'Female').length }
+                          { name: 'Male', value: dbDashboard ? dbDashboard.genderDiversity.male : employees.filter(e => e.gender === 'Male').length },
+                          { name: 'Female', value: dbDashboard ? dbDashboard.genderDiversity.female : employees.filter(e => e.gender === 'Female').length }
                         ]}
                         cx="50%"
                         cy="50%"
@@ -279,11 +285,11 @@ export const Dashboard: React.FC = () => {
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gender Diversity Ratio</p>
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 bg-blue-500 rounded-full"></span>
-                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Male: {employees.filter(e => e.gender === 'Male').length} employees</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Male: {dbDashboard ? dbDashboard.genderDiversity.male : employees.filter(e => e.gender === 'Male').length} employees</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 bg-pink-500 rounded-full"></span>
-                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Female: {employees.filter(e => e.gender === 'Female').length} employees</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Female: {dbDashboard ? dbDashboard.genderDiversity.female : employees.filter(e => e.gender === 'Female').length} employees</span>
                   </div>
                 </div>
               </div>
@@ -433,7 +439,7 @@ export const Dashboard: React.FC = () => {
             Session Audit Logs
           </h2>
           <div className="space-y-3.5 max-h-64 overflow-y-auto pr-1">
-            {auditLogs.map((log) => (
+            {dbAuditLogs.map((log) => (
               <div key={log.id} className="relative pl-5 border-l border-slate-100 dark:border-slate-800 pb-3 last:pb-0 text-xs">
                 <span className="absolute -left-1.5 top-0.5 h-3 w-3 rounded-full bg-primary border-2 border-white dark:border-slate-900 flex items-center justify-center"></span>
                 <div className="flex items-center justify-between text-slate-400">
@@ -458,30 +464,65 @@ export const Dashboard: React.FC = () => {
             <Smile className="h-4 w-4 text-pink-500" />
           </h2>
           <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-pink-50 dark:bg-pink-950/40 text-pink-500 rounded-xl text-xs font-bold text-center w-12 shrink-0">
-                🎂 <span className="block mt-0.5 text-[9px] uppercase">Today</span>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-800 dark:text-white">Aarav Sharma's Birthday</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Turns 32 today! Send your warm wishes.</p>
-                <button 
-                  onClick={() => { setActiveModule('engagement'); setActiveSubModule('feed'); }}
-                  className="text-[10px] text-primary hover:underline font-bold mt-1.5 block"
-                >
-                  Write on Post Feed →
-                </button>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-blue-50 dark:bg-blue-950/40 text-blue-500 rounded-xl text-xs font-bold text-center w-12 shrink-0">
-                💼 <span className="block mt-0.5 text-[9px] uppercase">Jul 5</span>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-800 dark:text-white">2-Year Work Anniversary</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Rohan Das completes 2 years at FactoCorp!</p>
-              </div>
-            </div>
+            {dbDashboard && (dbDashboard.celebrations.birthdays.length > 0 || dbDashboard.celebrations.anniversaries.length > 0) ? (
+              <>
+                {dbDashboard.celebrations.birthdays.map((b) => (
+                  <div key={b.id} className="flex items-start gap-3 animate-fade-in">
+                    <div className="p-2 bg-pink-50 dark:bg-pink-950/40 text-pink-500 rounded-xl text-xs font-bold text-center w-12 shrink-0">
+                      🎂 <span className="block mt-0.5 text-[9px] uppercase">Today</span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800 dark:text-white">{b.name}'s Birthday</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Turns a year older today! Send your warm wishes.</p>
+                      <button 
+                        onClick={() => { setActiveModule('engagement'); setActiveSubModule('feed'); }}
+                        className="text-[10px] text-primary hover:underline font-bold mt-1.5 block"
+                      >
+                        Write on Post Feed →
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {dbDashboard.celebrations.anniversaries.map((a) => (
+                  <div key={a.id} className="flex items-start gap-3 animate-fade-in">
+                    <div className="p-2 bg-blue-50 dark:bg-blue-950/40 text-blue-500 rounded-xl text-xs font-bold text-center w-12 shrink-0">
+                      💼 <span className="block mt-0.5 text-[9px] uppercase">Anniv</span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800 dark:text-white">{a.name}'s Work Anniversary</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Congratulations on another milestone year!</p>
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-pink-50 dark:bg-pink-950/40 text-pink-500 rounded-xl text-xs font-bold text-center w-12 shrink-0">
+                    🎂 <span className="block mt-0.5 text-[9px] uppercase">Today</span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800 dark:text-white">Aarav Sharma's Birthday</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Turns 32 today! Send your warm wishes.</p>
+                    <button 
+                      onClick={() => { setActiveModule('engagement'); setActiveSubModule('feed'); }}
+                      className="text-[10px] text-primary hover:underline font-bold mt-1.5 block"
+                    >
+                      Write on Post Feed →
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/40 text-blue-500 rounded-xl text-xs font-bold text-center w-12 shrink-0">
+                    💼 <span className="block mt-0.5 text-[9px] uppercase">Jul 5</span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800 dark:text-white">2-Year Work Anniversary</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Rohan Das completes 2 years at FactoCorp!</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -492,20 +533,36 @@ export const Dashboard: React.FC = () => {
             <Calendar className="h-4 w-4 text-primary" />
           </h2>
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <div>
-                <p className="font-bold text-slate-800 dark:text-white">Independence Day</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">National Holiday</p>
-              </div>
-              <span className="font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 border px-2.5 py-1 rounded-lg">Aug 15 (Sat)</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <div>
-                <p className="font-bold text-slate-800 dark:text-white">Ganesh Chaturthi</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Regional Holiday</p>
-              </div>
-              <span className="font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 border px-2.5 py-1 rounded-lg">Sep 14 (Mon)</span>
-            </div>
+            {dbDashboard && dbDashboard.upcomingHolidays.length > 0 ? (
+              dbDashboard.upcomingHolidays.map((holiday) => (
+                <div key={holiday.id} className="flex items-center justify-between text-xs animate-fade-in">
+                  <div>
+                    <p className="font-bold text-slate-800 dark:text-white">{holiday.name}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{holiday.type}</p>
+                  </div>
+                  <span className="font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 border px-2.5 py-1 rounded-lg">
+                    {holiday.date}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs">
+                  <div>
+                    <p className="font-bold text-slate-800 dark:text-white">Independence Day</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">National Holiday</p>
+                  </div>
+                  <span className="font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 border px-2.5 py-1 rounded-lg">Aug 15 (Sat)</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <div>
+                    <p className="font-bold text-slate-800 dark:text-white">Ganesh Chaturthi</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Regional Holiday</p>
+                  </div>
+                  <span className="font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 border px-2.5 py-1 rounded-lg">Sep 14 (Mon)</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
