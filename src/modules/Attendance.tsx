@@ -7,34 +7,332 @@ import {
   Filter,
   Lock,
   Search,
-  X
+  Users,
+  X,
+  Compass,
+  MapPin
 } from 'lucide-react';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Webcam from 'react-webcam';
 import { useApp } from '../context/AppContext';
-
-interface RegularizationRequest {
-  id: string;
-  employeeName: string;
-  date: string;
-  timeIn: string;
-  timeOut: string;
-  reason: string;
-  status: 'Approved' | 'Pending' | 'Rejected';
-}
+import { useEmployees } from '../api/hook/useEmployee';
+import {
+  usePunches,
+  useCreatePunch,
+  useRegularizations,
+  useApplyRegularization,
+  useUpdateRegularization,
+  useGeofences,
+  useCreateGeofence,
+  useDeleteGeofence,
+  PunchLog,
+  GeofenceLocation
+} from '../api/hook/useAttendance';
 
 export const Attendance: React.FC = () => {
-  const { employees, activeSubModule, setActiveSubModule, addAuditLog, userRole } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, userRole } = useApp();
+
+  // Simulated active employee switcher
+  const [selectedEmpId, setSelectedEmpId] = useState('');
+
+  // Fetch employees list
+  const { data: dbEmployeesRes, isLoading: employeesLoading } = useEmployees();
+  const employeesList = dbEmployeesRes?.data || [];
+
+  // Automatically select first employee as current user
+  useEffect(() => {
+    if (employeesList.length > 0 && !selectedEmpId) {
+      setSelectedEmpId(employeesList[0].id);
+    }
+  }, [employeesList, selectedEmpId]);
+
+  const activeEmployee = employeesList.find(emp => emp.id === selectedEmpId);
+
+  // Queries & Mutations
+  const { data: punchesRes, isLoading: punchesLoading } = usePunches(selectedEmpId);
+  const punchLogList = punchesRes?.data || [];
+
+  const { data: regularizeRes, isLoading: regsLoading } = useRegularizations();
+  const regularizeRequests = regularizeRes?.data || [];
+
+  const createPunchMut = useCreatePunch();
+  const applyRegMut = useApplyRegularization();
+  const updateRegMut = useUpdateRegularization();
+
+  const { data: fencesRes, isLoading: fencesLoading } = useGeofences();
+  const fencesList = fencesRes?.data || [];
+
+  const createFenceMut = useCreateGeofence();
+  const deleteFenceMut = useDeleteGeofence();
+
+  // New Geofence Form State
+  const [newFenceName, setNewFenceName] = useState('');
+  const [newFenceLat, setNewFenceLat] = useState(23.357445);
+  const [newFenceLng, setNewFenceLng] = useState(85.311484);
+  const [newFenceRadius, setNewFenceRadius] = useState(100);
+
 
   // GPS Punch State
-  const [gpsCoordinates, setGpsCoordinates] = useState({ lat: 19.0760, lng: 72.8777 }); // Mumbai HQ
-  const [distance, setDistance] = useState(12); // meters
+  const [gpsCoordinates, setGpsCoordinates] = useState({ lat: 23.357445, lng: 85.311484 });
   const [punchType, setPunchType] = useState<'In' | 'Out'>('In');
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
-  const [punchLog, setPunchLog] = useState<{ time: string; type: string; method: string }[]>([
-    { time: "Yesterday, 09:34 AM", type: "In", method: "Biometric Portal" },
-    { time: "Yesterday, 06:31 PM", type: "Out", method: "Biometric Portal" }
-  ]);
+
+  // Find matching or closest fence
+  let activeFenceMatch: { name: string; distance: number; radius: number; isInside: boolean } | null = null;
+  if (fencesList.length > 0) {
+    let closestFence: any = null;
+    let minDistance = Infinity;
+    for (const fence of fencesList) {
+      if (!fence.isActive) continue;
+      const d = localDistance(gpsCoordinates.lat, gpsCoordinates.lng, fence.lat, fence.lng);
+      if (d < minDistance) {
+        minDistance = d;
+        closestFence = fence;
+      }
+    }
+    if (closestFence) {
+      activeFenceMatch = {
+        name: closestFence.name,
+        distance: Math.round(minDistance),
+        radius: closestFence.radius,
+        isInside: minDistance <= closestFence.radius
+      };
+    }
+  }
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const punchMapRef = useRef<HTMLDivElement | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+
+  // Load Google Maps script
+  useEffect(() => {
+    const checkGoogle = () => {
+      if ((window as any).google) {
+        setMapLoaded(true);
+        return;
+      }
+      setTimeout(checkGoogle, 100);
+    };
+
+    if (!(window as any).google) {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDp1m24jCv0artNLvNYGiRemEEjwAduk20`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => setMapLoaded(true);
+      document.head.appendChild(script);
+    } else {
+      setMapLoaded(true);
+    }
+  }, []);
+
+  // Update Config Map
+  useEffect(() => {
+    if (!mapLoaded || !mapRef.current || !(window as any).google || activeSubModule !== 'geofence') return;
+
+    const googleMaps = (window as any).google.maps;
+    const mapCenter = { lat: newFenceLat, lng: newFenceLng };
+
+    const map = new googleMaps.Map(mapRef.current, {
+      center: mapCenter,
+      zoom: 15,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false
+    });
+
+    // Marker for the new/selected geofence center
+    const activeMarker = new googleMaps.Marker({
+      position: mapCenter,
+      map: map,
+      title: newFenceName || "Selected Geofence Center",
+      icon: {
+        path: googleMaps.SymbolPath.BACKWARD_CLOSED_ARROW,
+        scale: 6,
+        strokeColor: "#6366f1",
+        fillColor: "#6366f1",
+        fillOpacity: 0.8
+      }
+    });
+
+    // Draw active fence circle
+    const activeCircle = new googleMaps.Circle({
+      strokeColor: "#6366f1",
+      strokeOpacity: 0.8,
+      strokeWeight: 2,
+      fillColor: "#6366f1",
+      fillOpacity: 0.15,
+      map: map,
+      center: mapCenter,
+      radius: newFenceRadius
+    });
+
+    // Add markers and circles for existing geofences
+    fencesList.forEach((fence: any) => {
+      const fenceCenter = { lat: fence.lat, lng: fence.lng };
+      
+      // Existing fence circle
+      new googleMaps.Circle({
+        strokeColor: fence.isActive ? "#10b981" : "#64748b",
+        strokeOpacity: 0.6,
+        strokeWeight: 1.5,
+        fillColor: fence.isActive ? "#10b981" : "#64748b",
+        fillOpacity: 0.1,
+        map: map,
+        center: fenceCenter,
+        radius: fence.radius
+      });
+
+      // Existing fence marker
+      new googleMaps.Marker({
+        position: fenceCenter,
+        map: map,
+        title: fence.name
+      });
+    });
+
+    // Click map to set coordinates and resolve Location Name
+    map.addListener("click", (e: any) => {
+      if (e.latLng) {
+        const clickedLat = e.latLng.lat();
+        const clickedLng = e.latLng.lng();
+        setNewFenceLat(parseFloat(clickedLat.toFixed(6)));
+        setNewFenceLng(parseFloat(clickedLng.toFixed(6)));
+
+        const geocoder = new googleMaps.Geocoder();
+        geocoder.geocode({ location: { lat: clickedLat, lng: clickedLng } }, (results: any, status: any) => {
+          if (status === "OK" && results[0]) {
+            setNewFenceName(results[0].formatted_address);
+          }
+        });
+      }
+    });
+
+  }, [mapLoaded, newFenceLat, newFenceLng, newFenceRadius, fencesList, activeSubModule]);
+
+  // Update Punch Simulation Map
+  useEffect(() => {
+    if (!mapLoaded || !punchMapRef.current || !(window as any).google || activeSubModule !== 'punch') return;
+
+    const googleMaps = (window as any).google.maps;
+    const mapCenter = { lat: gpsCoordinates.lat, lng: gpsCoordinates.lng };
+
+    const map = new googleMaps.Map(punchMapRef.current, {
+      center: mapCenter,
+      zoom: 16,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false
+    });
+
+    // Marker for User simulated position
+    new googleMaps.Marker({
+      position: mapCenter,
+      map: map,
+      title: "Your Simulated Coordinates",
+      icon: {
+        path: googleMaps.SymbolPath.CIRCLE,
+        scale: 8,
+        strokeColor: "#3b82f6",
+        fillColor: "#3b82f6",
+        fillOpacity: 0.9
+      }
+    });
+
+    // Add circles for existing geofences
+    fencesList.forEach((fence: any) => {
+      const fenceCenter = { lat: fence.lat, lng: fence.lng };
+      
+      new googleMaps.Circle({
+        strokeColor: fence.isActive ? "#10b981" : "#64748b",
+        strokeOpacity: 0.5,
+        strokeWeight: 1.5,
+        fillColor: fence.isActive ? "#10b981" : "#64748b",
+        fillOpacity: 0.08,
+        map: map,
+        center: fenceCenter,
+        radius: fence.radius
+      });
+    });
+
+    // Click map to simulate movement
+    map.addListener("click", (e: any) => {
+      if (e.latLng) {
+        const clickedLat = e.latLng.lat();
+        const clickedLng = e.latLng.lng();
+        setGpsCoordinates({
+          lat: parseFloat(clickedLat.toFixed(6)),
+          lng: parseFloat(clickedLng.toFixed(6))
+        });
+      }
+    });
+
+  }, [mapLoaded, gpsCoordinates, fencesList, activeSubModule]);
+
+  const handleAutoDetectLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = parseFloat(position.coords.latitude.toFixed(6));
+          const lng = parseFloat(position.coords.longitude.toFixed(6));
+          setGpsCoordinates({ lat, lng });
+          setNewFenceLat(lat);
+          setNewFenceLng(lng);
+
+          // Reverse geocode to resolve Location Name
+          if ((window as any).google) {
+            const geocoder = new (window as any).google.maps.Geocoder();
+            geocoder.geocode({ location: { lat, lng } }, (results: any, status: any) => {
+              if (status === "OK" && results[0]) {
+                setNewFenceName(results[0].formatted_address);
+              }
+            });
+          }
+        },
+        (error) => {
+          alert(`Failed to get location permission: ${error.message}`);
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+    } else {
+      alert("Geolocation API is not supported in this browser.");
+    }
+  };
+
+  // Automatic Location & Name Fetching on Load
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = parseFloat(position.coords.latitude.toFixed(6));
+          const lng = parseFloat(position.coords.longitude.toFixed(6));
+          setGpsCoordinates({ lat, lng });
+          setNewFenceLat(lat);
+          setNewFenceLng(lng);
+
+          const autoResolve = () => {
+            if ((window as any).google) {
+              const geocoder = new (window as any).google.maps.Geocoder();
+              geocoder.geocode({ location: { lat, lng } }, (results: any, status: any) => {
+                if (status === "OK" && results[0]) {
+                  setNewFenceName(results[0].formatted_address);
+                }
+              });
+            } else {
+              setTimeout(autoResolve, 500);
+            }
+          };
+          autoResolve();
+        },
+        (err) => {
+          console.log("Automated location fetch failed:", err);
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+  }, [mapLoaded]);
+
+
+
 
   // Camera & Selfie Stream States using react-webcam
   const webcamRef = useRef<Webcam | null>(null);
@@ -52,11 +350,6 @@ export const Attendance: React.FC = () => {
     }
   };
 
-  // Regularization requests
-  const [regularizeRequests, setRegularizeRequests] = useState<RegularizationRequest[]>([
-    { id: "REG091", employeeName: "Aarav Sharma", date: "2026-06-25", timeIn: "09:30 AM", timeOut: "06:30 PM", reason: "Forgot to punch due to client conference", status: "Pending" }
-  ]);
-
   // New Regularization Request Form
   const [regDate, setRegDate] = useState('2026-07-01');
   const [regInTime, setRegInTime] = useState('09:30');
@@ -70,17 +363,16 @@ export const Attendance: React.FC = () => {
 
   // Roster states
   const [rosterWeek, setRosterWeek] = useState('Week 27 (Jul 1 - Jul 5)');
-  const [shifts, setShifts] = useState([
-    { empId: "EMP001", name: "Aarav Sharma", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", Sun: "Week Off" },
-    { empId: "EMP002", name: "Neha Patel", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", Sun: "Week Off" },
-    { empId: "EMP003", name: "Rohan Das", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", Sun: "Week Off" },
-    { empId: "EMP008", name: "Ananya Roy", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", Sun: "Week Off" }
+  const [shifts] = useState([
+    { empId: "EMP001", name: "Aarav Sharma", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", MonOff: "Week Off" },
+    { empId: "EMP002", name: "Neha Patel", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", MonOff: "Week Off" },
+    { empId: "EMP003", name: "Rohan Das", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", MonOff: "Week Off" },
+    { empId: "EMP008", name: "Ananya Roy", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", MonOff: "Week Off" }
   ]);
 
   // Attendance Calendar (Muster Roll) grid for July 2026
   const musterDays = Array.from({ length: 30 }, (_, i) => {
     const dayNum = i + 1;
-    // Mocking status
     let status: 'Present' | 'Late' | 'Absent' | 'Holiday' | 'WeekOff' = 'Present';
     if (dayNum % 7 === 4 || dayNum % 7 === 5) status = 'WeekOff';
     else if (dayNum === 10) status = 'Absent';
@@ -103,13 +395,11 @@ export const Attendance: React.FC = () => {
         return false;
       }
 
-      // Generate random challenge and user id
       const challenge = new Uint8Array(32);
       window.crypto.getRandomValues(challenge);
       const userId = new Uint8Array(16);
       window.crypto.getRandomValues(userId);
 
-      // Trigger native platform lock screen prompt
       const credential = await navigator.credentials.create({
         publicKey: {
           challenge,
@@ -137,19 +427,31 @@ export const Attendance: React.FC = () => {
   };
 
   const executePunch = () => {
-    const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ", Today";
+    if (!selectedEmpId) return;
     const methodStr = verifyMethod === 'selfie' ? "GPS + Selfie" : "GPS + Password";
-    setPunchLog(prev => [{ time: timeString, type: punchType, method: methodStr }, ...prev]);
-    
-    addAuditLog(
-      `Attendance Punch ${punchType}`, 
-      "Attendance Module", 
-      `Self punch ${punchType} verified via GPS coordinates (Distance: ${distance}m) and ${verifyMethod === 'selfie' ? 'liveliness face validation' : 'password authentication'}.`
-    );
 
-    alert(`Punch ${punchType} recorded successfully at ${timeString}!`);
-    setIsCameraActive(false);
-    setSelfiePreview(null);
+    createPunchMut.mutate({
+      employeeId: selectedEmpId,
+      type: punchType,
+      method: methodStr,
+      lat: gpsCoordinates.lat,
+      lng: gpsCoordinates.lng,
+      selfiePreview: verifyMethod === 'selfie' ? selfiePreview : null
+    }, {
+      onSuccess: () => {
+        addAuditLog(
+          `Attendance Punch ${punchType}`, 
+          "Attendance Module", 
+          `Self punch ${punchType} verified via GPS coordinates (Distance: ${activeFenceMatch?.distance || 0}m) and ${verifyMethod === 'selfie' ? 'liveliness face validation' : 'password authentication'}.`
+        );
+        alert(`Punch ${punchType} recorded successfully!`);
+        setIsCameraActive(false);
+        setSelfiePreview(null);
+      },
+      onError: (err: any) => {
+        alert(err?.response?.data?.message || err.message || "Failed to record punch");
+      }
+    });
   };
 
   const handlePunchSubmit = async () => {
@@ -173,29 +475,73 @@ export const Attendance: React.FC = () => {
 
   const handleApplyRegularization = (e: React.FormEvent) => {
     e.preventDefault();
-    const newReq: RegularizationRequest = {
-      id: `REG${Math.floor(Math.random() * 1000)}`,
-      employeeName: userRole === 'Super Admin' ? 'Vikram Malhotra' : userRole === 'HR Admin' ? 'Karan Johar' : userRole === 'Manager' ? 'Neha Patel' : 'Aarav Sharma',
+    if (!selectedEmpId) return;
+
+    applyRegMut.mutate({
+      employeeId: selectedEmpId,
       date: regDate,
       timeIn: regInTime,
       timeOut: regOutTime,
       reason: regReason,
-      status: 'Pending'
-    };
-    setRegularizeRequests(prev => [newReq, ...prev]);
-    addAuditLog("Regularization Request", "Attendance Module", `Applied regularization for date ${regDate}`);
-    alert("Regularization request submitted to manager.");
-    setRegReason('');
+    }, {
+      onSuccess: () => {
+        addAuditLog("Regularization Request", "Attendance Module", `Applied regularization for date ${regDate}`);
+        alert("Regularization request submitted successfully.");
+        setRegReason('');
+      },
+      onError: (err: any) => {
+        alert(err?.response?.data?.message || err.message || "Failed to apply regularization");
+      }
+    });
   };
 
   const handleApproveReg = (id: string, name: string, date: string) => {
-    setRegularizeRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'Approved' } : r));
-    addAuditLog("Approved Regularization", "Attendance Module", `Approved regularization request for ${name} on ${date}`);
+    updateRegMut.mutate({ id, status: 'Approved' }, {
+      onSuccess: () => {
+        addAuditLog("Approved Regularization", "Attendance Module", `Approved regularization request for ${name} on ${date}`);
+        alert("Request approved.");
+      }
+    });
   };
 
   const handleRejectReg = (id: string, name: string, date: string) => {
-    setRegularizeRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'Rejected' } : r));
-    addAuditLog("Rejected Regularization", "Attendance Module", `Rejected regularization request for ${name} on ${date}`);
+    updateRegMut.mutate({ id, status: 'Rejected' }, {
+      onSuccess: () => {
+        addAuditLog("Rejected Regularization", "Attendance Module", `Rejected regularization request for ${name} on ${date}`);
+        alert("Request rejected.");
+      }
+    });
+  };
+
+  const handleAddGeofence = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFenceName) {
+      alert("Please enter a geofence name");
+      return;
+    }
+    createFenceMut.mutate({
+      name: newFenceName,
+      lat: newFenceLat,
+      lng: newFenceLng,
+      radius: newFenceRadius,
+    }, {
+      onSuccess: () => {
+        alert("Geofence location registered successfully!");
+        setNewFenceName('');
+      },
+      onError: (err: any) => {
+        alert(err?.response?.data?.message || err.message || "Failed to create geofence");
+      }
+    });
+  };
+
+  const handleDeleteGeofence = (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete geofence "${name}"?`)) return;
+    deleteFenceMut.mutate(id, {
+      onSuccess: () => {
+        alert("Geofence deleted successfully");
+      }
+    });
   };
 
   return (
@@ -253,186 +599,348 @@ export const Attendance: React.FC = () => {
         >
           Attendance Reports
         </button>
+        <button 
+          onClick={() => setActiveSubModule('geofence')}
+          className={`py-3 px-5 text-sm font-semibold border-b-2 transition-all ${
+            activeSubModule === 'geofence' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          Geofencing Config
+        </button>
+      </div>
+
+      {/* Global Simulated User Switcher */}
+      <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-rose-100 dark:bg-rose-950/40 text-rose-600 rounded-xl">
+            <Users className="h-5 w-5" />
+          </div>
+          <div>
+            <h4 className="font-bold text-slate-800 dark:text-white text-sm">Simulate as Employee</h4>
+            <p className="text-slate-450 mt-0.5">Switch profiles to change who punches check-in/out logs or files regularization requests.</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedEmpId}
+            onChange={(e) => setSelectedEmpId(e.target.value)}
+            className="px-3.5 py-2 border rounded-xl bg-white dark:bg-slate-900 text-slate-750 dark:text-slate-300 font-semibold focus:outline-none"
+          >
+            {employeesLoading ? (
+              <option>Loading employees...</option>
+            ) : (
+              employeesList.map(emp => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name} ({emp.designation || 'Staff'})
+                </option>
+              ))
+            )}
+          </select>
+
+          {activeEmployee && (
+            <span className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-355 rounded-xl font-bold uppercase text-[10px]">
+              {activeEmployee.department?.name || 'Operations'}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ======================================= */}
       {/* 1. GPS / SELFIE PUNCH SIMULATOR         */}
       {/* ======================================= */}
       {activeSubModule === 'punch' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in text-xs">
-          {/* Punch Actions */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-1">
-            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">GPS Mobile Punch Card</h3>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in text-xs">
+          
+          {/* Left panel (col-span-5): Punch settings, verification & submit */}
+          <div className="lg:col-span-5 space-y-6">
             
-            <div className="flex bg-slate-50 dark:bg-slate-950 rounded-xl overflow-hidden p-1 border">
+            {/* Main Action card */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
+              <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex items-center justify-between">
+                <span>GPS Mobile Punch Card</span>
+                <span className="px-2 py-0.5 rounded-full text-[9px] bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 font-bold uppercase">
+                  Simulated Device
+                </span>
+              </h3>
+
+              {/* Punch Toggle */}
+              <div className="flex bg-slate-50 dark:bg-slate-955 rounded-xl overflow-hidden p-1 border border-slate-150 dark:border-slate-800">
+                <button 
+                  onClick={() => setPunchType('In')}
+                  className={`w-full py-2 rounded-lg font-bold text-xs transition-all ${
+                    punchType === 'In' 
+                      ? 'bg-primary text-white shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                  }`}
+                >
+                  PUNCH IN
+                </button>
+                <button 
+                  onClick={() => setPunchType('Out')}
+                  className={`w-full py-2 rounded-lg font-bold text-xs transition-all ${
+                    punchType === 'Out' 
+                      ? 'bg-rose-500 text-white shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                  }`}
+                >
+                  PUNCH OUT
+                </button>
+              </div>
+
+              {/* Verification Section */}
+              <div className="space-y-3">
+                <label className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Verification Method</label>
+                <div className="flex bg-slate-100 dark:bg-slate-955 rounded-lg p-0.5 border border-slate-150 dark:border-slate-800 text-[10px]">
+                  <button 
+                    type="button"
+                    onClick={() => setVerifyMethod('selfie')}
+                    className={`w-1/2 py-1.5 rounded font-bold transition-all ${
+                      verifyMethod === 'selfie' 
+                        ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-800 dark:text-white' 
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    Selfie Camera
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setVerifyMethod('password')}
+                    className={`w-1/2 py-1.5 rounded font-bold transition-all ${
+                      verifyMethod === 'password' 
+                        ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-800 dark:text-white' 
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    Password Auth
+                  </button>
+                </div>
+
+                {verifyMethod === 'selfie' ? (
+                  <div className="border border-slate-250 dark:border-slate-850 rounded-xl p-4 text-center bg-slate-50 dark:bg-slate-955/40 relative overflow-hidden h-44 flex flex-col justify-center items-center">
+                    {selfiePreview ? (
+                      <>
+                        <img src={selfiePreview} alt="Selfie Verification" className="absolute inset-0 w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <span className="text-green-400 font-bold bg-black/60 px-3 py-1 rounded-full flex items-center gap-1.5 border border-green-500/35">
+                            <Check className="h-4 w-4 animate-bounce" />
+                            Face Confirmed
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelfiePreview(null);
+                            setIsCameraActive(false);
+                          }}
+                          className="absolute top-2 right-2 bg-black/60 text-white p-1 rounded-full hover:bg-black/95 transition-all z-10"
+                          type="button"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    ) : isCameraActive ? (
+                      <>
+                        <Webcam
+                          audio={false}
+                          ref={webcamRef}
+                          screenshotFormat="image/jpeg"
+                          className="absolute inset-0 w-full h-full object-cover"
+                          style={{ transform: 'scaleX(-1)' }}
+                          videoConstraints={{
+                            facingMode: "user"
+                          }}
+                        />
+                        <div className="absolute bottom-2 inset-x-0 flex justify-center z-10">
+                          <button 
+                            onClick={capturePhoto}
+                            className="px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold shadow-md text-[10px]"
+                            type="button"
+                          >
+                            Capture Photo
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="h-8 w-8 text-slate-400 mb-2" />
+                        <button 
+                          onClick={() => setIsCameraActive(true)}
+                          className="px-3.5 py-1.5 bg-primary text-white rounded-lg font-bold hover:scale-105 transition-all text-[10px]"
+                          type="button"
+                        >
+                          Capture Mock Selfie
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50 dark:bg-slate-950 relative h-44 flex flex-col justify-center items-center text-center space-y-3">
+                    <div className="p-2.5 bg-primary/10 rounded-full text-primary">
+                      <Lock className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-850 dark:text-white block text-xs">Verify Desktop Screen Lock</span>
+                      <span className="text-[10px] text-slate-400 block max-w-[220px] mt-1">Requires your OS lock screen PIN or password authentication to verify GPS punch.</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* GPS Simulator Coordinates */}
+              <div className="p-3 border rounded-xl space-y-2.5 bg-slate-50/50 dark:bg-slate-950/50">
+                <span className="font-bold text-[10px] text-slate-400 uppercase block tracking-wider">Simulated Phone GPS Locator</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-bold block mb-1">Latitude</label>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      value={gpsCoordinates.lat}
+                      onChange={(e) => setGpsCoordinates({ ...gpsCoordinates, lat: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 text-slate-750 dark:text-slate-350"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-bold block mb-1">Longitude</label>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      value={gpsCoordinates.lng}
+                      onChange={(e) => setGpsCoordinates({ ...gpsCoordinates, lng: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 text-slate-750 dark:text-slate-350"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAutoDetectLocation}
+                  className="w-full mt-2 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-bold rounded-lg border text-[10px] flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Compass className="h-3.5 w-3.5" />
+                  <span>Auto-Detect Current GPS</span>
+                </button>
+              </div>
+
+              {/* Geofence Status */}
+              <div className="p-3.5 border rounded-xl space-y-2 bg-slate-50 dark:bg-slate-955/40">
+                <div className="flex items-center justify-between font-bold">
+                  <span className="text-slate-400 uppercase text-[10px] tracking-wider">Geofence Status</span>
+                  {fencesLoading ? (
+                    <span className="text-slate-400">LOADING FENCES...</span>
+                  ) : activeFenceMatch ? (
+                    activeFenceMatch.isInside ? (
+                      <span className="text-emerald-500 flex items-center gap-1.5">
+                        <span className="h-2 w-2 bg-emerald-500 rounded-full animate-ping"></span>
+                        MATCHED
+                      </span>
+                    ) : (
+                      <span className="text-rose-500 flex items-center gap-1.5">
+                        OUT OF RANGE
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-slate-400">NO FENCES FOUND</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-500 space-y-1 mt-1">
+                  {activeFenceMatch ? (
+                    activeFenceMatch.isInside ? (
+                      <p className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                        You are inside "{activeFenceMatch.name}" ({activeFenceMatch.distance}m away; limit: {activeFenceMatch.radius}m).
+                      </p>
+                    ) : (
+                      <p className="text-rose-500 font-semibold">
+                        You are outside "{activeFenceMatch.name}" ({activeFenceMatch.distance}m away; limit: {activeFenceMatch.radius}m).
+                      </p>
+                    )
+                  ) : (
+                    <p className="text-slate-450 italic">No active geofence locations exist. Please configure one in the Geofencing Config tab.</p>
+                  )}
+                </div>
+              </div>
+
               <button 
-                onClick={() => setPunchType('In')}
-                className={`w-full py-2 rounded-lg font-bold transition-all ${
-                  punchType === 'In' ? 'bg-primary text-white shadow-sm' : 'text-slate-500'
+                onClick={handlePunchSubmit}
+                disabled={isVerifyingLock || createPunchMut.isPending}
+                className={`w-full py-3 rounded-xl font-bold shadow-lg hover:scale-[1.02] transition-all ${
+                  isVerifyingLock ? 'bg-slate-400 cursor-not-allowed text-white shadow-none' :
+                  punchType === 'In' ? 'bg-primary text-white shadow-primary/20' : 'bg-rose-500 text-white shadow-rose-500/20'
                 }`}
               >
-                PUNCH IN
-              </button>
-              <button 
-                onClick={() => setPunchType('Out')}
-                className={`w-full py-2 rounded-lg font-bold transition-all ${
-                  punchType === 'Out' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-500'
-                }`}
-              >
-                PUNCH OUT
+                {isVerifyingLock ? 'Verifying Lock Screen...' : createPunchMut.isPending ? 'Syncing...' : 'Verify Punch & Sync'}
               </button>
             </div>
 
-            {/* Verification Method Selector */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 font-bold block">Verification Method</span>
-              </div>
-              <div className="flex bg-slate-100 dark:bg-slate-950 rounded-lg p-0.5 border text-[10px]">
-                <button 
-                  type="button"
-                  onClick={() => setVerifyMethod('selfie')}
-                  className={`w-1/2 py-1.5 rounded font-bold transition-all ${
-                    verifyMethod === 'selfie' ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500'
-                  }`}
-                >
-                  Selfie Camera
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setVerifyMethod('password')}
-                  className={`w-1/2 py-1.5 rounded font-bold transition-all ${
-                    verifyMethod === 'password' ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500'
-                  }`}
-                >
-                  Password Auth
-                </button>
+          </div>
+
+          {/* Right panel (col-span-7): Large Map and History list */}
+          <div className="lg:col-span-7 space-y-6">
+            
+            {/* Google Map Card */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col space-y-4">
+              <div className="flex items-center justify-between border-b pb-2">
+                <div>
+                  <h3 className="font-bold text-slate-800 dark:text-white text-sm">Real-time Location Verification</h3>
+                  <p className="text-slate-400 text-[10px] mt-0.5">Displays geofence regions. Click on the map to manually override and verify GPS.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>Your Position</span>
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500"></span>Office Geofences</span>
+                </div>
               </div>
 
-              {verifyMethod === 'selfie' ? (
-                <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-center bg-slate-50 dark:bg-slate-950 relative overflow-hidden h-40 flex flex-col justify-center items-center">
-                  {selfiePreview ? (
-                    <>
-                      <img src={selfiePreview} alt="Selfie Verification" className="absolute inset-0 w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                        <span className="text-green-400 font-bold bg-black/60 px-3 py-1 rounded-full flex items-center gap-1.5">
-                          <Check className="h-4 w-4" />
-                          Face Confirmed
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setSelfiePreview(null);
-                          setIsCameraActive(false);
-                        }}
-                        className="absolute top-2 right-2 bg-black/60 text-white p-1 rounded-full hover:bg-black/95 transition-all z-10"
-                        type="button"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </>
-                  ) : isCameraActive ? (
-                    <>
-                      <Webcam
-                        audio={false}
-                        ref={webcamRef}
-                        screenshotFormat="image/jpeg"
-                        className="absolute inset-0 w-full h-full object-cover"
-                        style={{ transform: 'scaleX(-1)' }}
-                        videoConstraints={{
-                          facingMode: "user"
-                        }}
-                      />
-                      <div className="absolute bottom-2 inset-x-0 flex justify-center z-10">
-                        <button 
-                          onClick={capturePhoto}
-                          className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold shadow-md text-[10px]"
-                          type="button"
-                        >
-                          Capture Photo
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="h-8 w-8 text-slate-400 mb-2 animate-bounce" />
-                      <button 
-                        onClick={() => setIsCameraActive(true)}
-                        className="px-3 py-1.5 bg-primary text-white rounded-lg font-bold"
-                        type="button"
-                      >
-                        Capture Mock Selfie
-                      </button>
-                    </>
-                  )}
+              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-inner relative h-[400px] bg-slate-100 dark:bg-slate-955">
+                <div ref={punchMapRef} className="w-full h-full" />
+                <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg font-bold text-[9px] flex items-center gap-1 select-none pointer-events-none border border-white/5">
+                  <MapPin className="h-3.5 w-3.5 text-blue-400 animate-bounce" />
+                  <span>Click map to set simulated location</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Session Logs Card */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+              <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex items-center justify-between">
+                <span>Session Punch Register</span>
+                <span className="px-2 py-0.5 rounded-full text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold uppercase">
+                  Today's Logs
+                </span>
+              </h3>
+              
+              {punchesLoading ? (
+                <div className="py-8 text-center text-slate-400 font-medium">Loading session logs...</div>
+              ) : punchLogList.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 font-medium italic">No check-in or out punches recorded today.</div>
               ) : (
-                <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50 dark:bg-slate-950 relative h-40 flex flex-col justify-center items-center text-center space-y-3">
-                  <div className="p-2.5 bg-primary/10 rounded-full text-primary">
-                    <Lock className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <span className="font-bold text-slate-850 dark:text-white block text-xs">Verify Desktop Screen Lock</span>
-                    <span className="text-[10px] text-slate-400 block max-w-[220px] mt-1">Requires your OS lock screen PIN or password authentication to verify GPS punch.</span>
-                  </div>
+                <div className="grid grid-cols-1 gap-2.5 max-h-[300px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                  {punchLogList.map((log) => (
+                    <div key={log.id} className="p-3 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-900/30 gap-4 text-xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${
+                          log.type === 'In' 
+                            ? 'bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400' 
+                            : 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
+                        }`}>
+                          <Clock className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800 dark:text-white">Punch {log.type === 'In' ? 'Check-In' : 'Check-Out'}</p>
+                          <p className="text-[10px] text-slate-450 mt-0.5" title={`${log.method} • GPS: ${log.lat}, ${log.lng}`}>
+                            {log.method} • {log.lat}, {log.lng}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="font-bold text-slate-700 dark:text-slate-200 shrink-0">{log.time}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Geofence Status */}
-            <div className="p-3.5 border rounded-xl space-y-2 bg-slate-50 dark:bg-slate-950">
-              <div className="flex items-center justify-between font-bold">
-                <span className="text-slate-400 uppercase text-[10px]">Geofence Fence Status</span>
-                <span className="text-emerald-500 flex items-center gap-1.5">
-                  <span className="h-2 w-2 bg-emerald-500 rounded-full animate-ping"></span>
-                  MATCHED
-                </span>
-              </div>
-              <div className="flex justify-between text-slate-500">
-                <span>Office HQ Lat/Lng:</span>
-                <span className="font-semibold text-slate-700 dark:text-slate-350">{gpsCoordinates.lat}, {gpsCoordinates.lng}</span>
-              </div>
-              <div className="flex justify-between text-slate-500">
-                <span>Estimated Distance:</span>
-                <span className="font-semibold text-slate-700 dark:text-slate-350">{distance} meters away</span>
-              </div>
-            </div>
-
-            <button 
-              onClick={handlePunchSubmit}
-              disabled={isVerifyingLock}
-              className={`w-full py-3 rounded-xl font-bold shadow-lg transition-all ${
-                isVerifyingLock ? 'bg-slate-400 cursor-not-allowed text-white shadow-none' :
-                punchType === 'In' ? 'bg-primary text-white shadow-primary/10' : 'bg-rose-500 text-white shadow-rose-500/10'
-              }`}
-            >
-              {isVerifyingLock ? 'Verifying Lock Screen...' : 'Verify Punch & Sync'}
-            </button>
           </div>
 
-          {/* Punch History Logs */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-2">
-            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Session Punch Register</h3>
-            
-            <div className="space-y-3.5">
-              {punchLog.map((log, idx) => (
-                <div key={idx} className="p-3 border rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-950 text-xs">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${
-                      log.type === 'In' ? 'bg-green-150 text-green-700' : 'bg-rose-100 text-rose-700'
-                    }`}>
-                      <Clock className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-850 dark:text-white">Punch {log.type === 'In' ? 'Check-In' : 'Check-Out'}</p>
-                      <p className="text-[10px] text-slate-400">{log.method}</p>
-                    </div>
-                  </div>
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">{log.time}</span>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
@@ -449,7 +957,7 @@ export const Attendance: React.FC = () => {
             <select 
               value={rosterWeek} 
               onChange={(e) => setRosterWeek(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350 focus:outline-none"
+              className="px-3 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-350 focus:outline-none animate-fade-in"
             >
               <option>Week 27 (Jul 1 - Jul 5)</option>
               <option>Week 28 (Jul 6 - Jul 12)</option>
@@ -480,7 +988,7 @@ export const Attendance: React.FC = () => {
                     <td className="p-3 text-center"><span className="bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-semibold">{s.Thu}</span></td>
                     <td className="p-3 text-center"><span className="bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-semibold">{s.Fri}</span></td>
                     <td className="p-3 text-center text-slate-400 font-semibold">{s.Sat}</td>
-                    <td className="p-3 text-center text-slate-400 font-semibold">{s.Sun}</td>
+                    <td className="p-3 text-center text-slate-400 font-semibold">{s.MonOff}</td>
                   </tr>
                 ))}
               </tbody>
@@ -544,9 +1052,10 @@ export const Attendance: React.FC = () => {
 
               <button 
                 type="submit" 
-                className="w-full py-2 bg-primary text-white rounded-xl font-bold hover:scale-105 transition-all shadow-md"
+                disabled={applyRegMut.isPending}
+                className="w-full py-2 bg-primary text-white rounded-xl font-bold hover:scale-105 transition-all shadow-md disabled:opacity-50"
               >
-                Submit Regularization Request
+                {applyRegMut.isPending ? "Submitting..." : "Submit Regularization Request"}
               </button>
             </form>
           </div>
@@ -555,18 +1064,20 @@ export const Attendance: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-2">
             <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Regularization History Log</h3>
             
-            <div className="space-y-3.5">
-              {regularizeRequests.length === 0 ? (
-                <p className="text-slate-400 text-center py-6">No regularization logs found.</p>
-              ) : (
-                regularizeRequests.map((req) => (
-                  <div key={req.id} className="p-4 border rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-950 gap-4 text-xs">
+            {regsLoading ? (
+              <div className="py-8 text-center text-slate-400 font-medium">Loading history logs...</div>
+            ) : regularizeRequests.length === 0 ? (
+              <p className="text-slate-400 text-center py-6">No regularization logs found.</p>
+            ) : (
+              <div className="space-y-3.5">
+                {regularizeRequests.map((req) => (
+                  <div key={req.id} className="p-4 border border-slate-150 dark:border-slate-850 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-955/40 gap-4 text-xs">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-800 dark:text-white">{req.employeeName}</span>
-                        <span className="text-[10px] text-slate-400">{req.date}</span>
+                        <span className="text-[10px] text-slate-450">{req.date}</span>
                       </div>
-                      <p className="text-slate-500 dark:text-slate-400 mt-1">
+                      <p className="text-slate-550 dark:text-slate-450 mt-1">
                         Expected In: <span className="font-semibold text-slate-750 dark:text-slate-200">{req.timeIn}</span> • Out: <span className="font-semibold text-slate-750 dark:text-slate-200">{req.timeOut}</span>
                       </p>
                       <p className="text-slate-450 mt-0.5">Reason: "{req.reason}"</p>
@@ -577,14 +1088,16 @@ export const Attendance: React.FC = () => {
                         <div className="flex gap-1.5">
                           <button 
                             onClick={() => handleApproveReg(req.id, req.employeeName, req.date)}
-                            className="p-1 bg-green-500 text-white rounded-lg"
+                            disabled={updateRegMut.isPending}
+                            className="p-1 bg-green-500 text-white rounded-lg hover:scale-105 disabled:opacity-50"
                             title="Approve"
                           >
                             <Check className="h-3.5 w-3.5" />
                           </button>
                           <button 
                             onClick={() => handleRejectReg(req.id, req.employeeName, req.date)}
-                            className="p-1 bg-red-500 text-white rounded-lg"
+                            disabled={updateRegMut.isPending}
+                            className="p-1 bg-red-500 text-white rounded-lg hover:scale-105 disabled:opacity-50"
                             title="Reject"
                           >
                             <X className="h-3.5 w-3.5" />
@@ -601,9 +1114,9 @@ export const Attendance: React.FC = () => {
                       )}
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -671,7 +1184,7 @@ export const Attendance: React.FC = () => {
               ))}
             </div>
             
-            <div className="flex gap-4 items-center mt-4 pt-3 border-t justify-center text-[10px] text-slate-400">
+            <div className="flex gap-4 items-center mt-4 pt-3 border-t justify-center text-[10px] text-slate-455">
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-green-500"></span>Present</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500"></span>Late</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500"></span>Absent</span>
@@ -751,7 +1264,7 @@ export const Attendance: React.FC = () => {
               <div>
                 <span className="text-[10px] text-slate-400 font-bold uppercase">Total Work Hours Tracked</span>
                 <h3 className="text-xl font-extrabold text-primary mt-1">
-                  {(employees.length * 22 * 8).toLocaleString()} Hrs
+                  {(employeesList.length * 22 * 8).toLocaleString()} Hrs
                 </h3>
               </div>
               <span className="text-[9px] text-slate-400 mt-2">Based on 22 billing days</span>
@@ -805,7 +1318,7 @@ export const Attendance: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y text-slate-650 dark:text-slate-350">
-                  {employees
+                  {employeesList
                     .filter(emp => emp.name.toLowerCase().includes(reportSearch.toLowerCase()))
                     .map((emp) => {
                       const presentDays = emp.id === 'EMP001' ? 21 : emp.id === 'EMP002' ? 22 : emp.id === 'EMP003' ? 18 : 20;
@@ -819,11 +1332,11 @@ export const Attendance: React.FC = () => {
                         <tr key={emp.id} className="hover:bg-slate-50 dark:hover:bg-slate-850">
                           <td className="p-3 font-semibold text-slate-500">{emp.id}</td>
                           <td className="p-3 font-bold text-slate-800 dark:text-white">{emp.name}</td>
-                          <td className="p-3 text-slate-600 dark:text-slate-300">{emp.department}</td>
+                          <td className="p-3 text-slate-600 dark:text-slate-300">{emp.department?.name || 'Operations'}</td>
                           <td className="p-3 text-center font-bold text-green-500">{presentDays}</td>
                           <td className="p-3 text-center font-bold text-amber-500">{lateDays}</td>
                           <td className="p-3 text-center font-bold text-red-500">{absentDays}</td>
-                          <td className="p-3 text-center text-slate-600 dark:text-slate-350">{avgLogin}</td>
+                          <td className="p-3 text-center text-slate-600 dark:text-slate-355">{avgLogin}</td>
                           <td className="p-3 text-right font-semibold">
                             {totalHours.toFixed(1)} Hrs
                           </td>
@@ -848,6 +1361,169 @@ export const Attendance: React.FC = () => {
               </table>
             </div>
           </div>
+        </div>
+      )}
+      {/* ======================================= */}
+      {/* 6. GEOFENCING CONFIGURATION             */}
+      {/* ======================================= */}
+      {activeSubModule === 'geofence' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in text-xs">
+          
+          {/* Left panel: Form and List (stacked) */}
+          <div className="lg:col-span-5 space-y-6">
+            
+            {/* Form */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+              <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex items-center justify-between">
+                <span>Add Office Geofence</span>
+                <span className="px-2 py-0.5 rounded-full text-[9px] bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 font-bold uppercase">
+                  Setup Perimeter
+                </span>
+              </h3>
+              
+              <form onSubmit={handleAddGeofence} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Location name</label>
+                  <input 
+                    type="text" 
+                    value={newFenceName} 
+                    onChange={(e) => setNewFenceName(e.target.value)}
+                    placeholder="e.g. Ranchi Branch Office"
+                    required
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-350"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-medium">Latitude</label>
+                    <input 
+                      type="number" 
+                      step="0.000001"
+                      value={newFenceLat} 
+                      onChange={(e) => setNewFenceLat(parseFloat(e.target.value) || 0)}
+                      required
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-350"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-medium">Longitude</label>
+                    <input 
+                      type="number" 
+                      step="0.000001"
+                      value={newFenceLng} 
+                      onChange={(e) => setNewFenceLng(parseFloat(e.target.value) || 0)}
+                      required
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-350"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Perimeter Radius (in meters)</label>
+                  <input 
+                    type="number" 
+                    value={newFenceRadius} 
+                    onChange={(e) => setNewFenceRadius(parseInt(e.target.value) || 0)}
+                    min="5"
+                    required
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-350"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAutoDetectLocation}
+                    className="w-1/2 py-2 bg-slate-105 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-bold rounded-xl border flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Compass className="h-3.5 w-3.5" />
+                    <span>Auto GPS</span>
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={createFenceMut.isPending}
+                    className="w-1/2 py-2 bg-primary text-white rounded-xl font-bold hover:scale-105 transition-all shadow-md disabled:opacity-50"
+                  >
+                    {createFenceMut.isPending ? "Adding..." : "Add Boundary"}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* List */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+              <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex items-center justify-between">
+                <span>Active Geofenced Areas</span>
+                <span className="text-[10px] text-slate-400 font-medium">Total: {fencesList.length}</span>
+              </h3>
+              
+              {fencesLoading ? (
+                <p className="text-slate-400 text-center py-4">Loading boundaries...</p>
+              ) : fencesList.length === 0 ? (
+                <p className="text-slate-400 text-center py-4">No geofenced boundaries registered.</p>
+              ) : (
+                <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                  {fencesList.map((fence) => {
+                    const distanceToFence = Math.round(localDistance(gpsCoordinates.lat, gpsCoordinates.lng, fence.lat, fence.lng));
+                    const isSimInside = distanceToFence <= fence.radius;
+
+                    return (
+                      <div key={fence.id} className="p-3 border border-slate-150 dark:border-slate-850 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-955/30 gap-4 text-xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-800 dark:text-white truncate max-w-[120px]" title={fence.name}>
+                              {fence.name}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase ${
+                              fence.isActive ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300' : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {fence.radius}m
+                            </span>
+                          </div>
+                          <p className="text-[10px] font-medium text-slate-500">
+                            Dist: <span className={isSimInside ? "text-emerald-500 font-bold" : "text-rose-500"}>{distanceToFence}m ({isSimInside ? "Inside" : "Outside"})</span>
+                          </p>
+                        </div>
+                        
+                        <button 
+                          onClick={() => handleDeleteGeofence(fence.id, fence.name)}
+                          disabled={deleteFenceMut.isPending}
+                          className="p-1.5 bg-rose-50 text-rose-500 dark:bg-rose-950/30 dark:text-rose-400 rounded-lg hover:scale-110 transition-all"
+                          title="Delete Geofence"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+          </div>
+
+          {/* Right panel: Huge Map (col-span-7) */}
+          <div className="lg:col-span-7 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col space-y-4">
+            <div className="flex items-center justify-between border-b pb-2">
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-white text-sm">Geofencing Radar Monitor</h3>
+                <p className="text-slate-400 text-[10px] mt-0.5">Click anywhere on the map to automatically position and grab coordinates.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-500"></span>Selected</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-green-500"></span>Active Fences</span>
+              </div>
+            </div>
+
+            <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-inner relative flex-1 h-[750px] bg-slate-100 dark:bg-slate-950">
+              <div ref={mapRef} className="w-full h-full" />
+              <div className="absolute bottom-4 left-4 bg-black/70 backdrop-blur-sm text-white px-3 py-1.5 rounded-xl font-semibold text-[10px] flex items-center gap-1.5 select-none pointer-events-none border border-white/10 shadow-lg">
+                <MapPin className="h-3.5 w-3.5 text-indigo-400 animate-bounce" />
+                <span>Selected: {newFenceLat.toFixed(6)}, {newFenceLng.toFixed(6)}</span>
+              </div>
+            </div>
+          </div>
 
         </div>
       )}
@@ -855,3 +1531,19 @@ export const Attendance: React.FC = () => {
     </div>
   );
 };
+
+const localDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371e3; // metres
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+};
+
