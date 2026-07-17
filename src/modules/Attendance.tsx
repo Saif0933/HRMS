@@ -114,12 +114,17 @@ export const Attendance: React.FC = () => {
     };
 
     if (!(window as any).google) {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDp1m24jCv0artNLvNYGiRemEEjwAduk20`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => setMapLoaded(true);
-      document.head.appendChild(script);
+      const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+      if (existingScript) {
+        checkGoogle();
+      } else {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDp1m24jCv0artNLvNYGiRemEEjwAduk20`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => setMapLoaded(true);
+        document.head.appendChild(script);
+      }
     } else {
       setMapLoaded(true);
     }
