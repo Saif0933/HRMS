@@ -9,7 +9,6 @@ import {
   useTickets,
   useCreateTicket,
   useResolveTicket,
-  HelpTicket
 } from '../api/hook/useHelpdesk';
 
 export const HelpDesk: React.FC = () => {

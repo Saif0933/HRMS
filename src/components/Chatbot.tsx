@@ -10,7 +10,7 @@ interface ChatMessage {
 }
 
 export const Chatbot: React.FC = () => {
-  const { userRole, employees, leaveRequests, setLeaveRequests, addAuditLog } = useApp();
+  const { userRole, employees, setLeaveRequests, addAuditLog } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     { 

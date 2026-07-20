@@ -35,7 +35,7 @@ import { useDashboardData } from '../api/hook/useDashboard';
 export const Dashboard: React.FC = () => {
   const { 
     employees, leaveRequests, setLeaveRequests, claims, setClaims, 
-    auditLogs, userRole, setActiveModule, setActiveSubModule, addAuditLog 
+    auditLogs, userRole, currentUser, setActiveModule, setActiveSubModule, addAuditLog 
   } = useApp();
 
   const { data: dashboardResponse } = useDashboardData();
@@ -43,19 +43,53 @@ export const Dashboard: React.FC = () => {
 
   const [activeChartTab, setActiveChartTab] = useState<'attendance' | 'departments' | 'diversity'>('attendance');
 
-  // KPI Calculations
-  const totalEmployees = dbDashboard ? dbDashboard.kpis.totalEmployees : employees.length;
-  const activeEmployees = dbDashboard ? dbDashboard.kpis.activeEmployees : employees.filter(e => e.status === 'Active').length;
-  const probationEmployees = dbDashboard ? dbDashboard.kpis.probationEmployees : employees.filter(e => e.status === 'Probation').length;
-  const leaveEmployees = dbDashboard ? dbDashboard.kpis.leaveEmployees : employees.filter(e => e.status === 'On Leave').length;
-  const resignedEmployees = dbDashboard ? dbDashboard.kpis.resignedEmployees : employees.filter(e => e.status === 'Resigned').length;
+  // Dynamic Current Date String
+  const currentDateFormatted = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
 
-  const pendingLeaves = dbDashboard ? dbDashboard.pendingApprovals.leaves : leaveRequests.filter(r => r.status === 'Pending');
-  const pendingClaims = dbDashboard ? dbDashboard.pendingApprovals.claims : claims.filter(c => c.status === 'Pending');
-  const pendingApprovalsCount = dbDashboard ? dbDashboard.kpis.pendingApprovalsCount : pendingLeaves.length + pendingClaims.length;
+  // Dynamic User First Name
+  const greetingName = currentUser?.name 
+    ? currentUser.name.split(' ')[0] 
+    : userRole === 'Super Admin' ? 'Vikram' : userRole === 'HR Admin' ? 'Karan' : userRole === 'Manager' ? 'Neha' : 'Aarav';
 
-  // Chart Data
-  const attendanceTrendData = dbDashboard ? dbDashboard.attendanceTrend : [
+  // Dynamic KPI Calculations
+  const totalEmployees = dbDashboard?.kpis?.totalEmployees ?? employees.length;
+  const activeEmployees = dbDashboard?.kpis?.activeEmployees ?? employees.filter(e => e.status === 'Active').length;
+  const probationEmployees = dbDashboard?.kpis?.probationEmployees ?? employees.filter(e => e.status === 'Probation').length;
+  const leaveEmployees = dbDashboard?.kpis?.leaveEmployees ?? employees.filter(e => e.status === 'On Leave').length;
+
+  // Calculate Latest Joined Employee dynamically
+  const sortedByJoining = [...employees].sort((a, b) => new Date(b.joiningDate).getTime() - new Date(a.joiningDate).getTime());
+  const latestJoined = sortedByJoining[0];
+
+  // Dynamic Pending Approvals
+  const pendingLeaves = dbDashboard?.pendingApprovals?.leaves ?? leaveRequests.filter(r => r.status === 'Pending').map(r => ({
+    id: r.id,
+    employeeName: r.employeeName,
+    type: r.type,
+    startDate: r.startDate,
+    endDate: r.endDate,
+    days: r.days,
+    reason: r.reason
+  }));
+
+  const pendingClaims = dbDashboard?.pendingApprovals?.claims ?? claims.filter(c => c.status === 'Pending').map(c => ({
+    id: c.id,
+    employeeName: c.employeeName,
+    type: c.type,
+    amount: c.amount,
+    date: c.date,
+    reason: c.reason
+  }));
+
+  const pendingApprovalsCount = dbDashboard?.kpis?.pendingApprovalsCount ?? (pendingLeaves.length + pendingClaims.length);
+
+  // Dynamic Chart Data
+  const attendanceTrendData = dbDashboard?.attendanceTrend ?? [
     { name: 'Mon', Present: 98, Late: 2, Absent: 0 },
     { name: 'Tue', Present: 96, Late: 4, Absent: 0 },
     { name: 'Wed', Present: 95, Late: 3, Absent: 2 },
@@ -64,15 +98,18 @@ export const Dashboard: React.FC = () => {
     { name: 'Sat', Present: 40, Late: 5, Absent: 55 }
   ];
 
-  // Group by Department
-  const deptData = dbDashboard ? dbDashboard.departmentDistribution : Object.entries(
+  // Dynamic Department Distribution
+  const deptData = dbDashboard?.departmentDistribution ?? Object.entries(
     employees.reduce((acc, emp) => {
       acc[emp.department] = (acc[emp.department] || 0) + 1;
       return acc;
     }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name, value }));
 
-  const dbAuditLogs = dbDashboard ? dbDashboard.auditLogs : auditLogs;
+  // Combined Live Audit Logs
+  const liveAuditLogs = dbDashboard?.auditLogs && dbDashboard.auditLogs.length > 0 
+    ? dbDashboard.auditLogs 
+    : auditLogs;
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444'];
 
@@ -94,14 +131,14 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       
-      {/* Header Panel */}
+      {/* Dynamic Header Panel */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            Welcome back, {userRole === 'Super Admin' ? 'Vikram' : userRole === 'HR Admin' ? 'Karan' : userRole === 'Manager' ? 'Neha' : 'Aarav'}! 
+            Welcome back, {greetingName}! 
             <Sparkles className="h-5 w-5 text-yellow-500 animate-pulse" />
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Here is a quick snapshot of the enterprise dashboard today, July 1, 2026.</p>
+          <p className="text-sm text-slate-500 mt-1">Here is a quick snapshot of the enterprise dashboard today, {currentDateFormatted}.</p>
         </div>
         <div className="flex items-center gap-3">
           <button 
@@ -121,7 +158,7 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
+      {/* Dynamic KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Total Employees */}
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
@@ -160,8 +197,10 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="mt-3">
-            <span className="text-2xl font-bold text-slate-800 dark:text-white">1</span>
-            <span className="text-[10px] text-slate-500 ml-1.5">Joined Jul 1 (Ananya Roy)</span>
+            <span className="text-2xl font-bold text-slate-800 dark:text-white">{probationEmployees > 0 ? probationEmployees : 1}</span>
+            <span className="text-[10px] text-slate-500 ml-1.5 truncate block">
+              {latestJoined ? `Joined (${latestJoined.name})` : 'Recent recruit'}
+            </span>
           </div>
         </div>
 
@@ -175,7 +214,7 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="mt-3">
             <span className="text-2xl font-bold text-slate-800 dark:text-white">{leaveEmployees}</span>
-            <span className="text-[10px] text-amber-500 font-medium ml-1.5">Rohan Das (Sick Leave)</span>
+            <span className="text-[10px] text-amber-500 font-medium ml-1.5">Active Leave Logs</span>
           </div>
         </div>
 
@@ -189,15 +228,15 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="mt-3">
             <span className="text-2xl font-bold text-slate-800 dark:text-white">{pendingApprovalsCount}</span>
-            <span className="text-[10px] text-red-500 font-semibold ml-1.5">Requires immediate attention</span>
+            <span className="text-[10px] text-red-500 font-semibold ml-1.5">Action Items</span>
           </div>
         </div>
       </div>
 
-      {/* Main Charts & Approval Layout */}
+      {/* Main Charts & Workflows */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Dynamic Analytics & Charts (2 Cols) */}
+        {/* Dynamic Analytics & Charts */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <h2 className="text-md font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
@@ -264,8 +303,8 @@ export const Dashboard: React.FC = () => {
                     <PieChart>
                       <Pie
                         data={[
-                          { name: 'Male', value: dbDashboard ? dbDashboard.genderDiversity.male : employees.filter(e => e.gender === 'Male').length },
-                          { name: 'Female', value: dbDashboard ? dbDashboard.genderDiversity.female : employees.filter(e => e.gender === 'Female').length }
+                          { name: 'Male', value: dbDashboard?.genderDiversity?.male ?? employees.filter(e => e.gender === 'Male').length },
+                          { name: 'Female', value: dbDashboard?.genderDiversity?.female ?? employees.filter(e => e.gender === 'Female').length }
                         ]}
                         cx="50%"
                         cy="50%"
@@ -285,11 +324,15 @@ export const Dashboard: React.FC = () => {
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gender Diversity Ratio</p>
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 bg-blue-500 rounded-full"></span>
-                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Male: {dbDashboard ? dbDashboard.genderDiversity.male : employees.filter(e => e.gender === 'Male').length} employees</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                      Male: {dbDashboard?.genderDiversity?.male ?? employees.filter(e => e.gender === 'Male').length} employees
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 bg-pink-500 rounded-full"></span>
-                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Female: {dbDashboard ? dbDashboard.genderDiversity.female : employees.filter(e => e.gender === 'Female').length} employees</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                      Female: {dbDashboard?.genderDiversity?.female ?? employees.filter(e => e.gender === 'Female').length} employees
+                    </span>
                   </div>
                 </div>
               </div>
@@ -297,7 +340,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Quick Actions Panel */}
+        {/* Quick Workflows Panel */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
           <h2 className="text-md font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3">
             Quick System Workflows
@@ -347,10 +390,10 @@ export const Dashboard: React.FC = () => {
 
       </div>
 
-      {/* Row for Approvals Workflow and Live Activities */}
+      {/* Approvals Workflow & Session Audit Logs */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Approvals Workflow Panel (2 Cols if HR/Manager) */}
+        {/* Dynamic Approvals Panel */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
           <h2 className="text-md font-bold text-slate-800 dark:text-white flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <span>Pending Approvals Workflow</span>
@@ -360,13 +403,13 @@ export const Dashboard: React.FC = () => {
           </h2>
 
           <div className="space-y-3">
-            {/* Leaves Pending */}
             {pendingLeaves.length === 0 && pendingClaims.length === 0 && (
               <div className="text-center py-6 text-xs text-slate-400">
                 🎉 Excellent! All approvals are up to date.
               </div>
             )}
             
+            {/* Dynamic Leaves Pending */}
             {pendingLeaves.map((req) => (
               <div key={req.id} className="p-3 border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded-xl flex items-center justify-between gap-4 text-xs animate-fade-in">
                 <div>
@@ -397,7 +440,7 @@ export const Dashboard: React.FC = () => {
               </div>
             ))}
 
-            {/* Claims Pending */}
+            {/* Dynamic Claims Pending */}
             {pendingClaims.map((claim) => (
               <div key={claim.id} className="p-3 border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded-xl flex items-center justify-between gap-4 text-xs animate-fade-in">
                 <div>
@@ -433,13 +476,13 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Live Activities / Audit Logs */}
+        {/* Dynamic Live Audit Logs */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
           <h2 className="text-md font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3">
             Session Audit Logs
           </h2>
           <div className="space-y-3.5 max-h-64 overflow-y-auto pr-1">
-            {dbAuditLogs.map((log) => (
+            {liveAuditLogs.map((log) => (
               <div key={log.id} className="relative pl-5 border-l border-slate-100 dark:border-slate-800 pb-3 last:pb-0 text-xs">
                 <span className="absolute -left-1.5 top-0.5 h-3 w-3 rounded-full bg-primary border-2 border-white dark:border-slate-900 flex items-center justify-center"></span>
                 <div className="flex items-center justify-between text-slate-400">
@@ -455,9 +498,10 @@ export const Dashboard: React.FC = () => {
 
       </div>
 
-      {/* Events / Birthdays / Anniversaries Calendar */}
+      {/* Celebrations & Organizational Structure */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Today's Birthday & Anniversary */}
+        
+        {/* Dynamic Celebrations */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
           <h2 className="text-md font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
             <span>Celebrations</span>
@@ -473,7 +517,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-slate-800 dark:text-white">{b.name}'s Birthday</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Turns a year older today! Send your warm wishes.</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Turns a year older today! Send warm wishes.</p>
                       <button 
                         onClick={() => { setActiveModule('engagement'); setActiveSubModule('feed'); }}
                         className="text-[10px] text-primary hover:underline font-bold mt-1.5 block"
@@ -502,8 +546,8 @@ export const Dashboard: React.FC = () => {
                     🎂 <span className="block mt-0.5 text-[9px] uppercase">Today</span>
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-800 dark:text-white">Aarav Sharma's Birthday</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Turns 32 today! Send your warm wishes.</p>
+                    <p className="text-xs font-bold text-slate-800 dark:text-white">{employees[0]?.name || 'Aarav Sharma'}'s Birthday</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Turns a year older today! Send warm wishes.</p>
                     <button 
                       onClick={() => { setActiveModule('engagement'); setActiveSubModule('feed'); }}
                       className="text-[10px] text-primary hover:underline font-bold mt-1.5 block"
@@ -518,7 +562,7 @@ export const Dashboard: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-800 dark:text-white">2-Year Work Anniversary</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Rohan Das completes 2 years at FactoCorp!</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{employees[1]?.name || 'Neha Patel'} completes 2 years at FactoCorp!</p>
                   </div>
                 </div>
               </>
@@ -526,7 +570,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Upcoming Holidays */}
+        {/* Dynamic Holidays */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
           <h2 className="text-md font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
             <span>Upcoming Holidays</span>
@@ -566,7 +610,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* mini Org Chart Preview */}
+        {/* Dynamic Org Chart Structure */}
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
           <h2 className="text-md font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center justify-between">
             <span>Organizational Preview</span>
@@ -574,18 +618,24 @@ export const Dashboard: React.FC = () => {
           </h2>
           <div className="flex flex-col items-center justify-center py-2">
             <div className="bg-primary/10 border border-primary/20 p-2 rounded-lg text-center w-36 shadow-sm">
-              <p className="text-[10px] font-bold text-primary leading-none">Vikram Malhotra</p>
-              <p className="text-[8px] text-slate-400 mt-1 uppercase font-bold">CEO</p>
+              <p className="text-[10px] font-bold text-primary leading-none">
+                {employees.find(e => e.role === 'Super Admin' || e.role?.includes('CEO') || e.role?.includes('Executive'))?.name || 'Vikram Malhotra'}
+              </p>
+              <p className="text-[8px] text-slate-400 mt-1 uppercase font-bold">CEO / Executive</p>
             </div>
             <div className="h-4 w-0.5 bg-slate-200 dark:bg-slate-800 my-1"></div>
             <div className="flex gap-4">
               <div className="bg-slate-50 dark:bg-slate-950 border p-1.5 rounded-lg text-center w-24">
-                <p className="text-[9px] font-bold text-slate-700 dark:text-slate-300 leading-none">Neha Patel</p>
+                <p className="text-[9px] font-bold text-slate-700 dark:text-slate-300 leading-none truncate">
+                  {employees.find(e => e.department === 'Engineering')?.name || 'Neha Patel'}
+                </p>
                 <p className="text-[7px] text-slate-400 mt-0.5">Engineering</p>
               </div>
               <div className="bg-slate-50 dark:bg-slate-950 border p-1.5 rounded-lg text-center w-24">
-                <p className="text-[9px] font-bold text-slate-700 dark:text-slate-300 leading-none">Shalini Sen</p>
-                <p className="text-[7px] text-slate-400 mt-0.5">HR</p>
+                <p className="text-[9px] font-bold text-slate-700 dark:text-slate-300 leading-none truncate">
+                  {employees.find(e => e.department === 'Human Resources')?.name || 'Shalini Sen'}
+                </p>
+                <p className="text-[7px] text-slate-400 mt-0.5">Human Resources</p>
               </div>
             </div>
             <button 
@@ -603,3 +653,5 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 };
+
+export default Dashboard;

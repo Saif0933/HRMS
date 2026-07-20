@@ -1,5 +1,5 @@
 import {
-  Check, X, Calendar, FileText, Plus, AlertCircle, ShieldAlert, Trash2, Clock, Edit
+  Check, X, Plus, ShieldAlert, Trash2, Clock, Edit
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
