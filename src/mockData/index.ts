@@ -47,8 +47,18 @@ export interface Employee {
   exitDate?: string;
   clearanceStatus?: 'Pending' | 'Approved';
 
-  // Assets
+  // Assets & Family
   assets: string[];
+  familyMembers?: {
+    id: string;
+    name: string;
+    relation: string;
+    dob: string;
+    contact?: string;
+    bloodGroup?: string;
+    isNominee: boolean;
+    isInsuranceCovered: boolean;
+  }[];
 }
 
 export interface LeaveRequest {

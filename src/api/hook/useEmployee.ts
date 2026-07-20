@@ -317,3 +317,88 @@ export const useUpdateEmployeePersonal = () => {
     },
   });
 };
+
+export interface EmployeeFamilyMember {
+  id: string;
+  employeeId: string;
+  name: string;
+  relation: string;
+  dob?: string | null;
+  contact?: string | null;
+  bloodGroup?: string | null;
+  isNominee: boolean;
+  isInsuranceCovered: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Hook to retrieve an employee's family & dependent details
+ * GET /api/v1/employees/:id/family
+ */
+export const useEmployeeFamily = (id?: string) => {
+  return useQuery<BaseResponse<EmployeeFamilyMember[]>, Error>({
+    queryKey: ['employee', id, 'family'],
+    queryFn: async () => {
+      if (!id) throw new Error('Employee ID is required');
+      const response = await apiClient.get<BaseResponse<EmployeeFamilyMember[]>>(`/employees/${id}/family`);
+      return response.data;
+    },
+    enabled: !!id,
+  });
+};
+
+/**
+ * Hook to add a family member for an employee
+ * POST /api/v1/employees/:id/family
+ */
+export const useAddEmployeeFamily = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    BaseResponse<EmployeeFamilyMember>,
+    Error,
+    {
+      employeeId: string;
+      data: {
+        name: string;
+        relation: string;
+        dob?: string | null;
+        contact?: string | null;
+        bloodGroup?: string | null;
+        isNominee?: boolean;
+        isInsuranceCovered?: boolean;
+      };
+    }
+  >({
+    mutationFn: async ({ employeeId, data }) => {
+      const response = await apiClient.post<BaseResponse<EmployeeFamilyMember>>(`/employees/${employeeId}/family`, data);
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employee', variables.employeeId, 'family'] });
+    },
+  });
+};
+
+/**
+ * Hook to delete a family member
+ * DELETE /api/v1/employees/:id/family/:familyId
+ */
+export const useDeleteEmployeeFamily = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    BaseResponse<Record<string, never>>,
+    Error,
+    { employeeId: string; familyId: string }
+  >({
+    mutationFn: async ({ employeeId, familyId }) => {
+      const response = await apiClient.delete<BaseResponse<Record<string, never>>>(`/employees/${employeeId}/family/${familyId}`);
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employee', variables.employeeId, 'family'] });
+    },
+  });
+};

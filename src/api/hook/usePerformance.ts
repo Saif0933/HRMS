@@ -40,7 +40,67 @@ export interface BellCurvePoint {
   Employees: number;
 }
 
+export interface PerformanceRatingRecord {
+  id: string;
+  employeeId: string;
+  month: string;
+  rating: number;
+  status: string;
+  tasks: string;
+  quality: string;
+  teamwork: string;
+  feedback?: string;
+  givenBy?: string;
+  createdAt: string;
+}
+
 // Queries and Mutations
+
+/**
+ * Hook to retrieve monthly performance ratings for an employee
+ * GET /api/v1/performance/ratings
+ */
+export const useMonthlyRatings = (employeeId?: string) => {
+  return useQuery<BaseResponse<PerformanceRatingRecord[]>, Error>({
+    queryKey: ['performanceMonthlyRatings', employeeId],
+    queryFn: async () => {
+      const response = await apiClient.get<BaseResponse<PerformanceRatingRecord[]>>('/performance/ratings', {
+        params: { employeeId },
+      });
+      return response.data;
+    },
+    enabled: !!employeeId,
+  });
+};
+
+/**
+ * Hook to submit monthly performance rating for an employee
+ * POST /api/v1/performance/ratings
+ */
+export const useCreateMonthlyRating = () => {
+  const queryClient = useQueryClient();
+  return useMutation<BaseResponse<PerformanceRatingRecord>, Error, {
+    employeeId: string;
+    month: string;
+    rating: number;
+    status?: string;
+    tasks?: string;
+    quality?: string;
+    teamwork?: string;
+    feedback?: string;
+    givenBy?: string;
+  }>({
+    mutationFn: async (payload) => {
+      const response = await apiClient.post<BaseResponse<PerformanceRatingRecord>>('/performance/ratings', payload);
+      return response.data;
+    },
+    onSuccess: (res) => {
+      if (res.success && res.data) {
+        queryClient.invalidateQueries({ queryKey: ['performanceMonthlyRatings'] });
+      }
+    },
+  });
+};
 
 /**
  * Hook to retrieve performance goals / KRAs
