@@ -156,14 +156,14 @@ export const Chatbot: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50">
       {/* Chat Trigger Button */}
       <button 
         id="factobot-chat-trigger"
         onClick={() => setIsOpen(!isOpen)}
-        className="h-14 w-14 rounded-full bg-primary text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 relative group"
+        className="h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-primary text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 relative group"
       >
-        {isOpen ? <X className="h-6 w-6" /> : <MessageSquare className="h-6 w-6" />}
+        {isOpen ? <X className="h-5 w-5 sm:h-6 sm:w-6" /> : <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6" />}
         {!isOpen && (
           <span className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
         )}
@@ -171,7 +171,7 @@ export const Chatbot: React.FC = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="absolute bottom-16 right-0 w-[380px] h-[500px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-fade-in z-50">
+        <div className="absolute bottom-14 sm:bottom-16 right-0 w-[calc(100vw-32px)] sm:w-[380px] max-w-[380px] h-[450px] sm:h-[500px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-fade-in z-50">
           
           {/* Header */}
           <div className="bg-slate-900 text-white p-4 flex items-center justify-between">

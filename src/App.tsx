@@ -24,6 +24,7 @@ import { Login } from './modules/Login';
 
 const MainLayout: React.FC = () => {
   const { activeModule, theme, isAuthenticated } = useApp();
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState<boolean>(false);
 
   if (!isAuthenticated) {
     return <Login />;
@@ -31,10 +32,10 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className={`flex h-screen overflow-hidden ${theme === 'dark' ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Navbar />
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">
+      <Sidebar mobileOpen={mobileMenuOpen} setMobileOpen={setMobileMenuOpen} />
+      <div className="flex-1 flex flex-col overflow-hidden w-full min-w-0">
+        <Navbar onToggleMobileMenu={() => setMobileMenuOpen(prev => !prev)} />
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
           {activeModule === 'dashboard' && <Dashboard />}
           {activeModule === 'employees' && <EmployeeManagement />}
           {activeModule === 'attendance' && <Attendance />}

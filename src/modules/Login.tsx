@@ -372,7 +372,7 @@ export const Login: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] bg-slate-100 dark:bg-slate-850 px-2 py-1 rounded-lg text-slate-500 dark:text-slate-400 font-mono font-semibold">
+                      <span className="text-[10px] bg-slate-100 dark:bg-slate-850 px-2 py-1 rounded-lg text-slate-500 dark:text-slate-400 font-mono font-semibold hidden sm:inline-block">
                         {user.email}
                       </span>
                       <ArrowRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />

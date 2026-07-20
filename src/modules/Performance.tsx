@@ -162,7 +162,7 @@ export const Performance: React.FC = () => {
     <div className="space-y-6">
       
       {/* Sub-tab Navigation */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800">
+      <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto whitespace-nowrap scrollbar-none">
         <button 
           onClick={() => setActiveSubModule('goals')}
           className={`py-3 px-5 text-sm font-semibold border-b-2 transition-all ${

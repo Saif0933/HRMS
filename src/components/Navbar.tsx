@@ -6,6 +6,7 @@ import {
   Globe,
   HelpCircle,
   LogOut,
+  Menu,
   MessageSquare,
   Moon,
   Search,
@@ -16,7 +17,11 @@ import {
 import React, { useState } from 'react';
 import { useApp, UserRole } from '../context/AppContext';
 
-export const Navbar: React.FC = () => {
+interface NavbarProps {
+  onToggleMobileMenu?: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
   const { 
     theme, setTheme, 
     language, setLanguage, 
@@ -53,29 +58,31 @@ export const Navbar: React.FC = () => {
   const handleRoleChange = (role: UserRole) => {
     setUserRole(role);
     setShowProfile(false);
-    // Add brief alert
     const alertMsg = `Switched to ${role} workspace view.`;
     console.log(alertMsg);
   };
 
-  const handleLogoClick = () => {
-    setActiveModule('dashboard');
-    setActiveSubModule('overview');
-  };
-
   return (
-    <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 flex items-center justify-between sticky top-0 z-40 shadow-sm transition-colors duration-200">
+    <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm transition-colors duration-200">
       
-      {/* Search Input */}
-      <div className="flex items-center gap-4 flex-1 max-w-md">
+      {/* Mobile Toggle & Search */}
+      <div className="flex items-center gap-2 sm:gap-4 flex-1 max-w-md">
+        <button 
+          onClick={onToggleMobileMenu}
+          className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors md:hidden shrink-0"
+          title="Toggle Navigation Menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
         <div className="relative w-full">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-500" />
           <input 
             type="text" 
-            placeholder="Global search (e.g. employee name, asset, ticket)..." 
+            placeholder="Global search (e.g. employee, asset)..." 
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-sm bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-700 dark:text-slate-200"
+            className="w-full pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs sm:text-sm bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-700 dark:text-slate-200"
           />
         </div>
       </div>
@@ -128,7 +135,7 @@ export const Navbar: React.FC = () => {
         {/* Calendar Shortcut */}
         <button 
           onClick={() => { setActiveModule('attendance'); setActiveSubModule('muster'); }}
-          className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
+          className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative hidden sm:block"
           title="Attendance & Holidays Calendar"
         >
           <Calendar className="h-5 w-5" />
@@ -137,7 +144,7 @@ export const Navbar: React.FC = () => {
         {/* Message Shortcut */}
         <button 
           onClick={() => { setActiveModule('engagement'); setActiveSubModule('feed'); }}
-          className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
+          className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative hidden sm:block"
           title="Team Announcements"
         >
           <MessageSquare className="h-5 w-5" />
@@ -159,7 +166,7 @@ export const Navbar: React.FC = () => {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+            <div className="absolute right-[-60px] sm:right-0 mt-2 w-[calc(100vw-32px)] sm:w-80 max-w-xs sm:max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
               <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950">
                 <span className="font-semibold text-slate-800 dark:text-white text-sm">Notifications</span>
                 {unreadCount > 0 && (

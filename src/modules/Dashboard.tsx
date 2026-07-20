@@ -122,7 +122,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Total Employees */}
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">

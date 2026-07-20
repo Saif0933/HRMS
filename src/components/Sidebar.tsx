@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { 
   LayoutDashboard, Users, Clock, CalendarDays, Wallet, Award, 
   Heart, Plane, Briefcase, FileText, Laptop, MailOpen, 
-  HelpCircle, ChevronDown, ChevronRight, Landmark, ClipboardList
+  HelpCircle, ChevronDown, ChevronRight, Landmark, ClipboardList, X
 } from 'lucide-react';
 
 interface MenuItem {
@@ -13,7 +13,12 @@ interface MenuItem {
   subItems?: { id: string; label: string }[];
 }
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  setMobileOpen?: (open: boolean) => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileOpen }) => {
   const { activeModule, setActiveModule, activeSubModule, setActiveSubModule } = useApp();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -127,11 +132,11 @@ export const Sidebar: React.FC = () => {
   const handleModuleClick = (item: MenuItem) => {
     setActiveModule(item.id);
     if (item.subItems) {
-      // Toggle dropdown if clicked and menu has subitems
       setOpenDropdown(openDropdown === item.id ? null : item.id);
       setActiveSubModule(item.subItems[0].id);
     } else {
       setOpenDropdown(null);
+      if (setMobileOpen) setMobileOpen(false);
     }
   };
 
@@ -139,114 +144,138 @@ export const Sidebar: React.FC = () => {
     e.stopPropagation();
     setActiveModule(moduleId);
     setActiveSubModule(subId);
+    if (setMobileOpen) setMobileOpen(false);
   };
 
   return (
-    <aside 
-      className={`bg-slate-900 text-slate-300 transition-all duration-300 ease-in-out flex flex-col h-screen select-none ${
-        isCollapsed ? 'w-20' : 'w-64'
-      } border-r border-slate-800 shrink-0`}
-    >
-      {/* Brand Header */}
-      <div className="flex items-center justify-between px-4 py-5 border-b border-slate-800 bg-slate-950">
-        {!isCollapsed && (
-          <div className="flex items-center gap-2">
-            <div className="bg-primary p-1.5 rounded-lg text-white font-bold flex items-center justify-center shadow-lg shadow-primary/20">
+    <>
+      {/* Mobile Overlay Backdrop */}
+      {mobileOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40 md:hidden animate-fade-in"
+          onClick={() => setMobileOpen?.(false)}
+        />
+      )}
+
+      <aside 
+        className={`bg-slate-900 text-slate-300 transition-all duration-300 ease-in-out flex flex-col h-screen select-none border-r border-slate-800 shrink-0
+          fixed inset-y-0 left-0 z-50 md:static ${
+            mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+          } ${
+            isCollapsed ? 'w-20' : 'w-64'
+          }`}
+      >
+        {/* Brand Header */}
+        <div className="flex items-center justify-between px-4 py-5 border-b border-slate-800 bg-slate-950">
+          {!isCollapsed && (
+            <div className="flex items-center gap-2">
+              <div className="bg-primary p-1.5 rounded-lg text-white font-bold flex items-center justify-center shadow-lg shadow-primary/20">
+                <Landmark className="h-5 w-5" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-extrabold text-white tracking-wide text-lg leading-none">factoHR</span>
+                <span className="text-[10px] text-slate-500 font-semibold uppercase mt-0.5">Enterprise Suite</span>
+              </div>
+            </div>
+          )}
+          {isCollapsed && (
+            <div className="bg-primary p-2 rounded-lg text-white mx-auto">
               <Landmark className="h-5 w-5" />
             </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-white tracking-wide text-lg leading-none">factoHR</span>
-              <span className="text-[10px] text-slate-500 font-semibold uppercase mt-0.5">Enterprise Suite</span>
-            </div>
-          </div>
-        )}
-        {isCollapsed && (
-          <div className="bg-primary p-2 rounded-lg text-white mx-auto">
-            <Landmark className="h-5 w-5" />
-          </div>
-        )}
-        <button 
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors hidden md:block"
-        >
-          {isCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronRight className="h-5 w-5 rotate-180" />}
-        </button>
-      </div>
+          )}
 
-      {/* Navigation List */}
-      <nav className="flex-1 overflow-y-auto py-4 space-y-1.5 px-3">
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          const isSelected = activeModule === item.id;
-          const isDropdownOpen = openDropdown === item.id || (isSelected && openDropdown === null);
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors hidden md:block"
+            >
+              {isCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronRight className="h-5 w-5 rotate-180" />}
+            </button>
+            <button 
+              onClick={() => setMobileOpen?.(false)}
+              className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors md:hidden"
+              title="Close Navigation"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
 
-          return (
-            <div key={item.id} className="space-y-1">
-              <button
-                onClick={() => handleModuleClick(item)}
-                className={`w-full flex items-center justify-between p-2.5 rounded-lg text-sm font-medium transition-all group ${
-                  isSelected 
-                    ? 'bg-primary text-white shadow-md shadow-primary/20' 
-                    : 'hover:bg-slate-800 hover:text-white text-slate-400'
-                }`}
-                title={isCollapsed ? item.label : undefined}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon className={`h-5 w-5 shrink-0 ${isSelected ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`} />
-                  {!isCollapsed && <span>{item.label}</span>}
-                </div>
-                {!isCollapsed && item.subItems && (
-                  <div>
-                    {isDropdownOpen ? (
-                      <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-white" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-white" />
-                    )}
+        {/* Navigation List */}
+        <nav className="flex-1 overflow-y-auto py-4 space-y-1.5 px-3">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const isSelected = activeModule === item.id;
+            const isDropdownOpen = openDropdown === item.id || (isSelected && openDropdown === null);
+
+            return (
+              <div key={item.id} className="space-y-1">
+                <button
+                  onClick={() => handleModuleClick(item)}
+                  className={`w-full flex items-center justify-between p-2.5 rounded-lg text-sm font-medium transition-all group ${
+                    isSelected 
+                      ? 'bg-primary text-white shadow-md shadow-primary/20' 
+                      : 'hover:bg-slate-800 hover:text-white text-slate-400'
+                  }`}
+                  title={isCollapsed ? item.label : undefined}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon className={`h-5 w-5 shrink-0 ${isSelected ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`} />
+                    {!isCollapsed && <span>{item.label}</span>}
+                  </div>
+                  {!isCollapsed && item.subItems && (
+                    <div>
+                      {isDropdownOpen ? (
+                        <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-white" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-white" />
+                      )}
+                    </div>
+                  )}
+                </button>
+
+                {/* Sub-menu Items */}
+                {!isCollapsed && item.subItems && isDropdownOpen && (
+                  <div className="pl-9 space-y-1 border-l border-slate-800 ml-5 mt-1 animate-fade-in">
+                    {item.subItems.map((sub) => {
+                      const isSubSelected = isSelected && activeSubModule === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={(e) => handleSubItemClick(item.id, sub.id, e)}
+                          className={`w-full text-left py-1.5 px-2 rounded-md text-xs font-normal transition-colors ${
+                            isSubSelected
+                              ? 'text-primary font-semibold bg-primary/10'
+                              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                          }`}
+                        >
+                          {sub.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
-              </button>
+              </div>
+            );
+          })}
+        </nav>
 
-              {/* Sub-menu Items */}
-              {!isCollapsed && item.subItems && isDropdownOpen && (
-                <div className="pl-9 space-y-1 border-l border-slate-800 ml-5 mt-1 animate-fade-in">
-                  {item.subItems.map((sub) => {
-                    const isSubSelected = isSelected && activeSubModule === sub.id;
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={(e) => handleSubItemClick(item.id, sub.id, e)}
-                        className={`w-full text-left py-1.5 px-2 rounded-md text-xs font-normal transition-colors ${
-                          isSubSelected
-                            ? 'text-primary font-semibold bg-primary/10'
-                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                        }`}
-                      >
-                        {sub.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+        {/* Footer Info */}
+        <div className="p-4 border-t border-slate-800 bg-slate-950/50">
+          {!isCollapsed ? (
+            <div className="flex flex-col text-xs text-slate-500">
+              <span className="font-semibold text-slate-400">FactoCorp HRMS v4.2</span>
+              <span>Server: Cloud Secure</span>
+              <span className="mt-1 flex items-center gap-1.5 text-[10px] text-green-500 font-bold uppercase">
+                <span className="h-1.5 w-1.5 bg-green-500 rounded-full animate-ping"></span>
+                Live Sync Active
+              </span>
             </div>
-          );
-        })}
-      </nav>
-
-      {/* Footer Info */}
-      <div className="p-4 border-t border-slate-800 bg-slate-950/50">
-        {!isCollapsed ? (
-          <div className="flex flex-col text-xs text-slate-500">
-            <span className="font-semibold text-slate-400">FactoCorp HRMS v4.2</span>
-            <span>Server: Cloud Secure</span>
-            <span className="mt-1 flex items-center gap-1.5 text-[10px] text-green-500 font-bold uppercase">
-              <span className="h-1.5 w-1.5 bg-green-500 rounded-full animate-ping"></span>
-              Live Sync Active
-            </span>
-          </div>
-        ) : (
-          <div className="h-2 w-2 bg-green-500 rounded-full mx-auto animate-pulse" title="System Online"></div>
-        )}
-      </div>
-    </aside>
+          ) : (
+            <div className="h-2 w-2 bg-green-500 rounded-full mx-auto animate-pulse" title="System Online"></div>
+          )}
+        </div>
+      </aside>
+    </>
   );
 };
