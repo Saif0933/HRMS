@@ -2143,7 +2143,20 @@ export const EmployeeManagement: React.FC = () => {
                       <div><span className="text-slate-400 block text-[10px]">Contact Email</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150 truncate">{activeEmployee.email}</p></div>
                       <div><span className="text-slate-400 block text-[10px]">Contact Phone</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.phone || '+91 98765 43210'}</p></div>
                       <div><span className="text-slate-400 block text-[10px]">Nationality</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">Indian</p></div>
-                      <div><span className="text-slate-400 block text-[10px]">Father's / Guardian Name</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{(activeEmployee as any).spouseName || 'Rajendra Sharma'}</p></div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">Father's / Guardian Name</span>
+                        <p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">
+                          {(() => {
+                            const famList = familyMembersMap[activeEmployee.id] || [];
+                            const fatherEntry = famList.find(f =>
+                              ['father', 'guardian', 'parent', 'mother'].includes(f.relation.toLowerCase())
+                            );
+                            return fatherEntry
+                              ? `${fatherEntry.name} (${fatherEntry.relation})`
+                              : 'Not Added';
+                          })()}
+                        </p>
+                      </div>
                       <div className="col-span-2 border-t pt-2 dark:border-slate-800"><span className="text-slate-400 block text-[10px]">Permanent Address</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.location ? `${activeEmployee.location}, India` : 'Andheri East, Mumbai, Maharashtra 400069'}</p></div>
                       <div className="col-span-2"><span className="text-slate-400 block text-[10px]">Emergency Contact</span><p className="font-semibold mt-0.5 text-emerald-600 dark:text-emerald-400 font-mono">{(familyMembersMap[activeEmployee.id]?.[0]?.contact) || (activeEmployee as any).spouseContact || '+91 98000 11223'} (Family Emergency Contact)</p></div>
                       <div className="col-span-2"><span className="text-slate-400 block text-[10px]">Languages Spoken</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">English, Hindi, Marathi</p></div>
