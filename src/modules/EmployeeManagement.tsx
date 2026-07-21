@@ -39,7 +39,9 @@ import {
   useUpdateEmployeeSalary,
   useEmployeeFamily,
   useAddEmployeeFamily,
-  useDeleteEmployeeFamily
+  useDeleteEmployeeFamily,
+  useEmployeeExit,
+  useSaveEmployeeExit
 } from '../api/hook/useEmployee';
 import { useFeedbacks, useCreateFeedback, useMonthlyRatings, useCreateMonthlyRating } from '../api/hook/usePerformance';
 import {
@@ -784,6 +786,10 @@ export const EmployeeManagement: React.FC = () => {
 
   // Dynamic Role & Department Override State
   const [empOverridesMap, setEmpOverridesMap] = useState<Record<string, { role?: string; department?: string; basic?: number; netSalary?: number; status?: Employee['status']; clearanceStatus?: Employee['clearanceStatus'] }>>({});
+  const [selectedExitEmpId, setSelectedExitEmpId] = useState('');
+  const [resignationSearchTerm, setResignationSearchTerm] = useState('');
+  const [resignationDeptFilter, setResignationDeptFilter] = useState('All');
+  const [selectedResignedEmpId, setSelectedResignedEmpId] = useState<string | null>(null);
 
   // Dynamic Performance Ratings State per Employee (Super Admin)
   const [empRatingsMap, setEmpRatingsMap] = useState<Record<string, Array<{
@@ -899,6 +905,8 @@ export const EmployeeManagement: React.FC = () => {
   const { data: familyResponse } = useEmployeeFamily(activeEmployee?.id);
   const addFamilyMutation = useAddEmployeeFamily();
   const deleteFamilyMutation = useDeleteEmployeeFamily();
+  const saveExitMutation = useSaveEmployeeExit();
+  const { data: exitResponse } = useEmployeeExit(selectedExitEmpId || activeEmployee?.id);
 
   const salaryDetails = salaryResponse?.data || activeEmployee;
   const personalDetails = personalResponse?.data || activeEmployee;
@@ -1216,8 +1224,13 @@ export const EmployeeManagement: React.FC = () => {
     dependentName?: string;
     dependentRelation?: string;
     dependentDob?: string;
+    casualLeave?: number;
+    sickLeave?: number;
+    earnedLeave?: number;
+    maternityPaternityLeave?: number;
+    leavePolicy?: string;
   }>({
-    id: `EMP0${employees.length + 1}`,
+    id: `EMP${String(Date.now()).slice(-3)}${Math.floor(10 + Math.random() * 90)}`,
     name: '', role: '', department: 'Engineering', status: 'Probation',
     joiningDate: new Date().toISOString().split('T')[0], location: 'Mumbai',
     manager: 'Neha Patel', basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
@@ -1227,15 +1240,56 @@ export const EmployeeManagement: React.FC = () => {
     promotions: [], transfers: [], probationDuration: '6 Months', probationEnd: '',
     confirmationStatus: 'Pending', assets: ['AST-100 (ID Card)'],
     spouseName: '', spouseRelation: 'Spouse', spouseDob: '', spouseContact: '',
-    dependentName: '', dependentRelation: 'Child', dependentDob: ''
+    dependentName: '', dependentRelation: 'Child', dependentDob: '',
+    casualLeave: 12, sickLeave: 12, earnedLeave: 15, maternityPaternityLeave: 10,
+    leavePolicy: 'Standard Corporate Leave Policy 2026'
   });
 
   // Exit & Clearance Workflow State
-  const [selectedExitEmpId, setSelectedExitEmpId] = useState('EMP009');
-  const [resignationReason, setResignationReason] = useState('Personal Growth');
+  const [exitResignationDate, setExitResignationDate] = useState('2026-07-01');
+  const [exitLastWorkingDay, setExitLastWorkingDay] = useState('2026-07-31');
+  const [resignationReason, setResignationReason] = useState('Career Advancement & Personal Reasons');
+  const [exitNoticeDays, setExitNoticeDays] = useState<number>(30);
+  const [exitLeaveEncashDays, setExitLeaveEncashDays] = useState<number>(12);
+  const [exitPenaltyDeduction, setExitPenaltyDeduction] = useState<number>(0);
+
   const [itClearance, setItClearance] = useState(false);
   const [financeClearance, setFinanceClearance] = useState(false);
   const [adminClearance, setAdminClearance] = useState(false);
+  const [hrClearance, setHrClearance] = useState(false);
+  
+  const [showFFLetterModal, setShowFFLetterModal] = useState(false);
+
+  // Dynamic Exit Registry Map with local persistence
+  const [exitRegistryMap, setExitRegistryMap] = useState<Record<string, {
+    resignationDate: string;
+    lastWorkingDay: string;
+    reason: string;
+    noticeDays: number;
+    leaveEncashDays: number;
+    penaltyDeduction: number;
+    itClearance: boolean;
+    financeClearance: boolean;
+    adminClearance: boolean;
+    hrClearance: boolean;
+    status: 'Pending Clearance' | 'Clearance Approved' | 'Settled';
+    settledDate?: string;
+  }>>(() => {
+    try {
+      const saved = localStorage.getItem('hrms_emp_exit_registry');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('hrms_emp_exit_registry', JSON.stringify(exitRegistryMap));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [exitRegistryMap]);
 
   // Bulk Actions State
   const [bulkMailSubject, setBulkMailSubject] = useState('');
@@ -1243,14 +1297,28 @@ export const EmployeeManagement: React.FC = () => {
   const [selectedBulkEmpIds, setSelectedBulkEmpIds] = useState<string[]>([]);
   const [dragActive, setDragActive] = useState(false);
 
-  // Filtering Directory
-  const filteredEmployees = employees.filter(emp => {
+  // Active employees for standard directory (EXCLUDE Resigned & Terminated)
+  const activeEmployees = employees.filter(emp => emp.status !== 'Resigned' && emp.status !== 'Terminated');
+  
+  // Resigned employees for dedicated Resignation archive
+  const resignedEmployees = employees.filter(emp => emp.status === 'Resigned' || emp.status === 'Terminated');
+
+  // Directory filter uses activeEmployees so resigned employees never show in active directory
+  const filteredEmployees = activeEmployees.filter(emp => {
     const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           emp.role.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           emp.id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = deptFilter === 'All' || emp.department === deptFilter;
     const matchesStatus = statusFilter === 'All' || emp.status === statusFilter;
     return matchesSearch && matchesDept && matchesStatus;
+  });
+
+  const filteredResignedEmployees = resignedEmployees.filter(emp => {
+    const matchesSearch = emp.name.toLowerCase().includes(resignationSearchTerm.toLowerCase()) || 
+                          emp.role.toLowerCase().includes(resignationSearchTerm.toLowerCase()) || 
+                          emp.id.toLowerCase().includes(resignationSearchTerm.toLowerCase());
+    const matchesDept = resignationDeptFilter === 'All' || emp.department === resignationDeptFilter;
+    return matchesSearch && matchesDept;
   });
 
   const handleDeleteEmployee = (id: string) => {
@@ -1433,7 +1501,7 @@ export const EmployeeManagement: React.FC = () => {
         // Reset Stepper
         setStepperStep(1);
         setNewEmp({
-          id: `EMP0${employees.length + 2}`,
+          id: `EMP${String(Date.now()).slice(-3)}${Math.floor(10 + Math.random() * 90)}`,
           name: '', role: '', department: 'Engineering', status: 'Probation',
           joiningDate: new Date().toISOString().split('T')[0], location: 'Mumbai',
           manager: 'Neha Patel', basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
@@ -1474,29 +1542,132 @@ export const EmployeeManagement: React.FC = () => {
     );
   };
 
-  const calculateFullFinal = (emp: Employee) => {
-    // Basic calculation for presentation
-    const totalEarnings = emp.basic + emp.hra + emp.allowance;
-    const leaveEncashment = Math.round((emp.basic / 30) * 12); // Mock 12 days leave
-    const gratuity = emp.joiningDate.startsWith('201') ? Math.round((emp.basic / 26) * 15 * 5) : 0; // Mock 5 years if joined in 201x
-    const deductions = emp.deductions;
-    const netPayable = totalEarnings + leaveEncashment + gratuity - deductions;
-    return { earnings: totalEarnings, leaveEncash: leaveEncashment, gratuity, deductions, netPayable };
+  const calculateFullFinal = (emp: Employee, customParams?: {
+    noticeDays?: number;
+    leaveEncashDays?: number;
+    penaltyDeduction?: number;
+  }) => {
+    const basic = emp.basic || 30000;
+    const hra = emp.hra || 12000;
+    const allowance = emp.allowance || 8000;
+    const standardDeductions = emp.deductions || 2000;
+
+    const record = exitRegistryMap[emp.id];
+    const nDays = customParams?.noticeDays ?? record?.noticeDays ?? exitNoticeDays;
+    const lDays = customParams?.leaveEncashDays ?? record?.leaveEncashDays ?? exitLeaveEncashDays;
+    const pDeduction = customParams?.penaltyDeduction ?? record?.penaltyDeduction ?? exitPenaltyDeduction;
+
+    const monthlyGross = basic + hra + allowance;
+    const noticePay = Math.round((monthlyGross / 30) * nDays);
+    const leaveEncashment = Math.round((basic / 30) * lDays);
+    
+    // Gratuity calculation if employee joined > 4.5 years ago
+    const joinYear = emp.joiningDate ? new Date(emp.joiningDate).getFullYear() : 2024;
+    const currentYear = 2026;
+    const yearsWorked = Math.max(0, currentYear - joinYear);
+    const gratuity = yearsWorked >= 5 ? Math.round((basic / 26) * 15 * yearsWorked) : 0;
+
+    const totalEarnings = noticePay + leaveEncashment + gratuity;
+    const totalDeductions = standardDeductions + pDeduction;
+    const netPayable = Math.max(0, totalEarnings - totalDeductions);
+
+    return {
+      basic,
+      hra,
+      allowance,
+      monthlyGross,
+      noticePay,
+      leaveEncashment,
+      gratuity,
+      yearsWorked,
+      standardDeductions,
+      penaltyDeduction: pDeduction,
+      totalEarnings,
+      totalDeductions,
+      netPayable,
+      noticeDays: nDays,
+      leaveDays: lDays
+    };
   };
 
   const handleProcessClearance = () => {
-    if (!selectedExitEmpId) return;
+    if (!selectedExitEmpId) {
+      alert("Please select an employee first!");
+      return;
+    }
     const targetEmp = employees.find(e => e.id === selectedExitEmpId);
+    if (!targetEmp) return;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Update exit registry map
+    setExitRegistryMap(prev => ({
+      ...prev,
+      [selectedExitEmpId]: {
+        resignationDate: exitResignationDate,
+        lastWorkingDay: exitLastWorkingDay,
+        reason: resignationReason,
+        noticeDays: exitNoticeDays,
+        leaveEncashDays: exitLeaveEncashDays,
+        penaltyDeduction: exitPenaltyDeduction,
+        itClearance: true,
+        financeClearance: true,
+        adminClearance: true,
+        hrClearance: true,
+        status: 'Clearance Approved',
+        settledDate: todayStr
+      }
+    }));
+
+    // Update employee status & clearance status in overrides & DB
     setEmpOverridesMap(prev => ({
       ...prev,
       [selectedExitEmpId]: {
         ...(prev[selectedExitEmpId] || {}),
-        status: 'Terminated',
+        status: 'Resigned',
         clearanceStatus: 'Approved'
       }
     }));
-    addAuditLog("F&F Settlement Processed", "Employee Center", `Processed Full & Final settlement for ${targetEmp?.name || selectedExitEmpId}`);
-    alert("Clearance checklists approved. F&F statement processed successfully!");
+
+    // Save exit record to backend API
+    const ffCalc = calculateFullFinal(targetEmp);
+    saveExitMutation.mutate({
+      employeeId: selectedExitEmpId,
+      data: {
+        resignationDate: exitResignationDate,
+        lastWorkingDay: exitLastWorkingDay,
+        reason: resignationReason,
+        noticeDays: exitNoticeDays,
+        leaveEncashDays: exitLeaveEncashDays,
+        penaltyDeduction: exitPenaltyDeduction,
+        itClearance: true,
+        financeClearance: true,
+        adminClearance: true,
+        hrClearance: true,
+        status: 'CLEARANCE_APPROVED',
+        settledDate: todayStr,
+        netPayable: ffCalc.netPayable
+      }
+    }, {
+      onError: (err) => {
+        console.warn("Backend exit save warning:", err.message);
+      }
+    });
+
+    if (updatePersonalMutation && updatePersonalMutation.mutate) {
+      updatePersonalMutation.mutate({
+        id: targetEmp.id,
+        data: { clearanceStatus: 'Approved' } as any
+      }, { onError: () => {} });
+    }
+
+    addAuditLog(
+      "Full & Final Settlement Approved",
+      "Employee Center",
+      `Approved F&F settlement and clearance for employee ${targetEmp.name} (${targetEmp.id}). Net Settlement: ₹${ffCalc.netPayable.toLocaleString()}`
+    );
+
+    alert(`Success! Clearance checklist approved & F&F settlement finalized for ${targetEmp.name}.`);
   };
 
   return (
@@ -1543,6 +1714,21 @@ export const EmployeeManagement: React.FC = () => {
           }`}
         >
           Exit Management & F&F
+        </button>
+        <button 
+          onClick={() => setActiveSubModule('resignation')}
+          className={`py-3 px-5 text-sm font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+            activeSubModule === 'resignation' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <span>Resignation Archive</span>
+          {resignedEmployees.length > 0 && (
+            <span className="text-[10px] bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-bold px-1.5 py-0.5 rounded-full">
+              {resignedEmployees.length}
+            </span>
+          )}
         </button>
         <button 
           onClick={() => setActiveSubModule('bulk')}
@@ -1912,12 +2098,20 @@ export const EmployeeManagement: React.FC = () => {
                         </div>
                         <div className="space-y-1">
                           <label className="text-slate-400 font-medium">Blood Group</label>
-                          <input 
-                            type="text" 
+                          <select 
                             value={pBloodGroup} 
                             onChange={(e) => setPBloodGroup(e.target.value)}
-                            className="w-full px-2 py-1.5 border rounded bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
-                          />
+                            className="w-full px-2 py-1.5 border rounded bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-semibold"
+                          >
+                            <option value="A+">A+</option>
+                            <option value="A-">A-</option>
+                            <option value="B+">B+</option>
+                            <option value="B-">B-</option>
+                            <option value="O+">O+</option>
+                            <option value="O-">O-</option>
+                            <option value="AB+">AB+</option>
+                            <option value="AB-">AB-</option>
+                          </select>
                         </div>
                         <div className="space-y-1">
                           <label className="text-slate-400 font-medium">Marital Status</label>
@@ -2961,8 +3155,8 @@ export const EmployeeManagement: React.FC = () => {
           </div>
 
           {/* Stepper Steps UI */}
-          <div className="flex items-center justify-between border-b pb-4">
-            {[1, 2, 3, 4].map((step) => (
+          <div className="flex items-center justify-between border-b pb-4 overflow-x-auto">
+            {[1, 2, 3, 4, 5].map((step) => (
               <div key={step} className="flex items-center gap-2">
                 <div className={`h-7 w-7 rounded-full flex items-center justify-center font-bold border ${
                   stepperStep === step 
@@ -2973,10 +3167,10 @@ export const EmployeeManagement: React.FC = () => {
                 }`}>
                   {step}
                 </div>
-                <span className={`font-semibold ${stepperStep === step ? 'text-primary' : 'text-slate-400'}`}>
-                  {step === 1 ? 'Personal Details' : step === 2 ? 'Family & Dependents' : step === 3 ? 'Remittance & Work' : 'Confirmation'}
+                <span className={`font-semibold whitespace-nowrap ${stepperStep === step ? 'text-primary' : 'text-slate-400'}`}>
+                  {step === 1 ? 'Personal Details' : step === 2 ? 'Family & Dependents' : step === 3 ? 'Remittance & Work' : step === 4 ? 'Leave Allocation' : 'Confirmation'}
                 </span>
-                {step < 4 && <ChevronRight className="h-4 w-4 text-slate-400 mx-2 hidden md:block" />}
+                {step < 5 && <ChevronRight className="h-4 w-4 text-slate-400 mx-2 hidden md:block" />}
               </div>
             ))}
           </div>
@@ -3025,6 +3219,24 @@ export const EmployeeManagement: React.FC = () => {
                   >
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Blood Group</label>
+                  <select 
+                    value={newEmp.bloodGroup || 'O+'} 
+                    onChange={(e) => setNewEmp({ ...newEmp, bloodGroup: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-semibold"
+                  >
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -3239,10 +3451,89 @@ export const EmployeeManagement: React.FC = () => {
             </div>
           )}
 
-          {/* Step 4 Content */}
+          {/* Step 4 Content: Leave Allocation & Policy Assignment */}
           {stepperStep === 4 && (
             <div className="space-y-4">
-              <h3 className="font-bold text-slate-800 dark:text-white text-sm">Step 4: Confirm Master Record Information</h3>
+              <div className="flex items-center justify-between border-b pb-2">
+                <div>
+                  <h3 className="font-bold text-slate-800 dark:text-white text-sm">Step 4: Leave Allocation & Policy Assignment</h3>
+                  <p className="text-slate-400 text-[11px]">Configure initial leave balances, entitlements, and leave policies for the employee.</p>
+                </div>
+                <span className="text-[10px] bg-primary/10 text-primary font-bold px-2.5 py-1 rounded-full">
+                  Annual Allocation
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-slate-400 font-medium">Assigned Leave Policy</label>
+                  <select
+                    value={newEmp.leavePolicy || 'Standard Corporate Leave Policy 2026'}
+                    onChange={(e) => setNewEmp({ ...newEmp, leavePolicy: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-medium"
+                  >
+                    <option value="Standard Corporate Leave Policy 2026">Standard Corporate Leave Policy 2026 (12 CL, 12 SL, 15 EL)</option>
+                    <option value="Executive Leave Policy 2026">Executive Leave Policy 2026 (15 CL, 15 SL, 20 EL)</option>
+                    <option value="Probationer Leave Policy 2026">Probationer Leave Policy 2026 (6 CL, 6 SL, 0 EL)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Casual Leave (CL) Days / Year</label>
+                  <input 
+                    type="number" 
+                    value={newEmp.casualLeave ?? 12} 
+                    onChange={(e) => setNewEmp({ ...newEmp, casualLeave: Number(e.target.value) })}
+                    placeholder="12" 
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-semibold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Sick Leave (SL) Days / Year</label>
+                  <input 
+                    type="number" 
+                    value={newEmp.sickLeave ?? 12} 
+                    onChange={(e) => setNewEmp({ ...newEmp, sickLeave: Number(e.target.value) })}
+                    placeholder="12" 
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-semibold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Earned / Privilege Leave (EL) Days / Year</label>
+                  <input 
+                    type="number" 
+                    value={newEmp.earnedLeave ?? 15} 
+                    onChange={(e) => setNewEmp({ ...newEmp, earnedLeave: Number(e.target.value) })}
+                    placeholder="15" 
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-semibold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Parental / Special Leave Days / Year</label>
+                  <input 
+                    type="number" 
+                    value={newEmp.maternityPaternityLeave ?? 10} 
+                    onChange={(e) => setNewEmp({ ...newEmp, maternityPaternityLeave: Number(e.target.value) })}
+                    placeholder="10" 
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-800 dark:text-emerald-300 text-[11px] font-medium flex items-center justify-between">
+                <span>✓ Total Annual Leave Allocation: <strong>{(newEmp.casualLeave || 12) + (newEmp.sickLeave || 12) + (newEmp.earnedLeave || 15) + (newEmp.maternityPaternityLeave || 10)} Days</strong></span>
+                <span>Carry Forward Limit: Max 30 Days</span>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5 Content: Confirmation & Master Entry */}
+          {stepperStep === 5 && (
+            <div className="space-y-4">
+              <h3 className="font-bold text-slate-800 dark:text-white text-sm">Step 5: Confirm Master Record Information</h3>
               <div className="p-4 bg-slate-50 dark:bg-slate-950 border rounded-xl space-y-3.5">
                 <p className="font-bold text-slate-800 dark:text-white">Verify all fields match legal physical documents:</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -3253,7 +3544,7 @@ export const EmployeeManagement: React.FC = () => {
                   <div><span className="text-slate-400">Bank Account</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.bankAccount || "N/A"}</p></div>
                   <div><span className="text-slate-400">PAN</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.pan || "N/A"}</p></div>
                   <div><span className="text-slate-400">Primary Nominee</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.spouseName || "Not Provided"}</p></div>
-                  <div><span className="text-slate-400">Emergency Contact</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.spouseContact || "Not Provided"}</p></div>
+                  <div><span className="text-slate-400">Leave Quotas (CL/SL/EL)</span><p className="font-semibold text-emerald-600 font-bold">{newEmp.casualLeave || 12} / {newEmp.sickLeave || 12} / {newEmp.earnedLeave || 15} Days</p></div>
                 </div>
               </div>
             </div>
@@ -3268,7 +3559,7 @@ export const EmployeeManagement: React.FC = () => {
             >
               Previous Step
             </button>
-            {stepperStep < 4 ? (
+            {stepperStep < 5 ? (
               <button 
                 onClick={() => setStepperStep(prev => prev + 1)}
                 className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:scale-105 transition-all"
@@ -3362,121 +3653,820 @@ export const EmployeeManagement: React.FC = () => {
       {/* 5. EXIT MANAGEMENT & RESIGNATION        */}
       {/* ======================================= */}
       {activeSubModule === 'exit' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in text-xs">
-          {/* Left Column: Exit Initiation */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-1">
-            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Trigger Employee Exit</h3>
+        <div className="space-y-6 animate-fade-in text-xs">
+          
+          {/* Top Metric & Status Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-2xs">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Total Exits Logged</span>
+              <p className="text-2xl font-bold text-slate-800 dark:text-white mt-1">
+                {Object.keys(exitRegistryMap).length || employees.filter(e => e.status === 'Resigned' || e.status === 'Terminated').length || 1}
+              </p>
+            </div>
+            <div className="bg-amber-50 dark:bg-amber-950/20 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30 shadow-2xs">
+              <span className="text-amber-600 dark:text-amber-400 font-bold uppercase text-[10px]">Pending Clearances</span>
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-300 mt-1">
+                {employees.filter(e => e.clearanceStatus === 'Pending' || !e.clearanceStatus).length}
+              </p>
+            </div>
+            <div className="bg-emerald-50 dark:bg-emerald-950/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-900/30 shadow-2xs">
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold uppercase text-[10px]">F&F Approved / Settled</span>
+              <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">
+                {employees.filter(e => e.clearanceStatus === 'Approved').length || 1}
+              </p>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30 shadow-2xs">
+              <span className="text-blue-600 dark:text-blue-400 font-bold uppercase text-[10px]">Active Notice Period</span>
+              <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">
+                {employees.filter(e => e.status === 'Resigned').length || 1}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            <div className="space-y-1">
-              <label className="text-slate-400 font-medium">Select Resigning Employee</label>
-              <select 
-                value={selectedExitEmpId} 
-                onChange={(e) => setSelectedExitEmpId(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
-              >
-                {employees.map(e => (
-                  <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
-                ))}
-              </select>
+            {/* Left Column: Trigger Exit & Clearance Checklist */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-1">
+              <div className="flex items-center justify-between border-b pb-2">
+                <h3 className="font-bold text-slate-800 dark:text-white text-sm">Initiate / Update Employee Exit</h3>
+                <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full font-bold text-slate-600 dark:text-slate-300">STEP 1 OF 2</span>
+              </div>
+              
+              {/* Select Employee */}
+              <div className="space-y-1">
+                <label className="text-slate-400 font-bold">Select Resigning Employee</label>
+                <select 
+                  value={selectedExitEmpId} 
+                  onChange={(e) => {
+                    const empId = e.target.value;
+                    setSelectedExitEmpId(empId);
+                    const record = exitRegistryMap[empId];
+                    if (record) {
+                      setExitResignationDate(record.resignationDate);
+                      setExitLastWorkingDay(record.lastWorkingDay);
+                      setResignationReason(record.reason);
+                      setExitNoticeDays(record.noticeDays);
+                      setExitLeaveEncashDays(record.leaveEncashDays);
+                      setExitPenaltyDeduction(record.penaltyDeduction || 0);
+                      setItClearance(record.itClearance);
+                      setFinanceClearance(record.financeClearance);
+                      setAdminClearance(record.adminClearance);
+                      setHrClearance(record.hrClearance);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border rounded-xl focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-semibold"
+                >
+                  {employees.map(e => (
+                    <option key={e.id} value={e.id}>{e.name} ({e.id}) - {e.department}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Resignation & LWD Dates */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Resignation Date</label>
+                  <input 
+                    type="date"
+                    value={exitResignationDate}
+                    onChange={(e) => setExitResignationDate(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Last Working Day</label>
+                  <input 
+                    type="date"
+                    value={exitLastWorkingDay}
+                    onChange={(e) => setExitLastWorkingDay(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                  />
+                </div>
+              </div>
+
+              {/* Notice & Leave Parameters */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium text-[10px]">Notice Days</label>
+                  <input 
+                    type="number"
+                    value={exitNoticeDays}
+                    onChange={(e) => setExitNoticeDays(Number(e.target.value))}
+                    className="w-full px-2 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium text-[10px]">Encash Days</label>
+                  <input 
+                    type="number"
+                    value={exitLeaveEncashDays}
+                    onChange={(e) => setExitLeaveEncashDays(Number(e.target.value))}
+                    className="w-full px-2 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-bold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium text-[10px]">Penalty (₹)</label>
+                  <input 
+                    type="number"
+                    value={exitPenaltyDeduction}
+                    onChange={(e) => setExitPenaltyDeduction(Number(e.target.value))}
+                    className="w-full px-2 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-bold text-rose-500"
+                  />
+                </div>
+              </div>
+
+              {/* Resignation Reason */}
+              <div className="space-y-1">
+                <label className="text-slate-400 font-medium">Reason for Exit / Resignation</label>
+                <textarea 
+                  value={resignationReason} 
+                  onChange={(e) => setResignationReason(e.target.value)}
+                  rows={2} 
+                  className="w-full px-3 py-1.5 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
+                  placeholder="State employee exit rationale..."
+                />
+              </div>
+
+              {/* Clearance Checklist with Progress */}
+              <div className="space-y-3 pt-2 border-t">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Clearance Checklist</span>
+                  {(() => {
+                    const count = [itClearance, financeClearance, adminClearance, hrClearance].filter(Boolean).length;
+                    return (
+                      <span className="text-[10px] font-bold text-primary">
+                        {count}/4 Completed ({count * 25}%)
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                {/* Progress Bar */}
+                <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: `${([itClearance, financeClearance, adminClearance, hrClearance].filter(Boolean).length) * 25}%` }}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center justify-between p-2 rounded-lg border bg-slate-50/50 dark:bg-slate-950/40 cursor-pointer">
+                    <span className="text-slate-700 dark:text-slate-300 font-medium">IT Assets & Email Account Revocation</span>
+                    <input type="checkbox" checked={itClearance} onChange={(e) => setItClearance(e.target.checked)} className="rounded text-primary focus:ring-0 h-4 w-4" />
+                  </label>
+                  <label className="flex items-center justify-between p-2 rounded-lg border bg-slate-50/50 dark:bg-slate-950/40 cursor-pointer">
+                    <span className="text-slate-700 dark:text-slate-300 font-medium">Finance & Expense Claims Clearance</span>
+                    <input type="checkbox" checked={financeClearance} onChange={(e) => setFinanceClearance(e.target.checked)} className="rounded text-primary focus:ring-0 h-4 w-4" />
+                  </label>
+                  <label className="flex items-center justify-between p-2 rounded-lg border bg-slate-50/50 dark:bg-slate-950/40 cursor-pointer">
+                    <span className="text-slate-700 dark:text-slate-300 font-medium">Admin & Key / Access Card Handover</span>
+                    <input type="checkbox" checked={adminClearance} onChange={(e) => setAdminClearance(e.target.checked)} className="rounded text-primary focus:ring-0 h-4 w-4" />
+                  </label>
+                  <label className="flex items-center justify-between p-2 rounded-lg border bg-slate-50/50 dark:bg-slate-950/40 cursor-pointer">
+                    <span className="text-slate-700 dark:text-slate-300 font-medium">HR Exit Interview & Relieving Signed</span>
+                    <input type="checkbox" checked={hrClearance} onChange={(e) => setHrClearance(e.target.checked)} className="rounded text-primary focus:ring-0 h-4 w-4" />
+                  </label>
+                </div>
+              </div>
+
+              {/* Settlement Approval Action */}
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <button 
+                  onClick={() => {
+                    if (!selectedExitEmpId) return;
+                    saveExitMutation.mutate({
+                      employeeId: selectedExitEmpId,
+                      data: {
+                        resignationDate: exitResignationDate,
+                        lastWorkingDay: exitLastWorkingDay,
+                        reason: resignationReason,
+                        noticeDays: exitNoticeDays,
+                        leaveEncashDays: exitLeaveEncashDays,
+                        penaltyDeduction: exitPenaltyDeduction,
+                        itClearance,
+                        financeClearance,
+                        adminClearance,
+                        hrClearance,
+                        status: (itClearance && financeClearance && adminClearance && hrClearance) ? 'CLEARANCE_APPROVED' : 'PENDING_CLEARANCE',
+                      }
+                    }, {
+                      onSuccess: () => alert("Exit details saved to database successfully!"),
+                      onError: (err) => alert("Failed to save exit details: " + err.message)
+                    });
+                  }}
+                  className="py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl font-bold transition-all text-center"
+                >
+                  Save Exit Draft
+                </button>
+                <button 
+                  onClick={() => {
+                    setItClearance(true);
+                    setFinanceClearance(true);
+                    setAdminClearance(true);
+                    setHrClearance(true);
+                    handleProcessClearance();
+                  }}
+                  className="py-2.5 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold shadow-md hover:scale-102 transition-all text-center"
+                >
+                  Approve & Finalize F&F
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-slate-400 font-medium">Reason for Resignation</label>
-              <textarea 
-                value={resignationReason} 
-                onChange={(e) => setResignationReason(e.target.value)}
-                rows={3} 
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
+            {/* Right Column: Full & Final Settlement Calculator Statement */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-2">
+              <div className="flex items-center justify-between border-b pb-2">
+                <div>
+                  <h3 className="font-bold text-slate-800 dark:text-white text-sm">Full & Final (F&F) Settlement Statement</h3>
+                  <p className="text-[10px] text-slate-400">Live dynamic computation based on employee salary structure & parameters</p>
+                </div>
+                <button 
+                  onClick={() => setShowFFLetterModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl font-bold hover:bg-primary hover:text-white transition-colors"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Preview Settlement Statement
+                </button>
+              </div>
+
+              {(() => {
+                const emp = employees.find(e => e.id === selectedExitEmpId) || employees[0];
+                if (!emp) return <p className="text-slate-400">Please select an employee.</p>;
+                
+                const details = calculateFullFinal(emp, {
+                  noticeDays: exitNoticeDays,
+                  leaveEncashDays: exitLeaveEncashDays,
+                  penaltyDeduction: exitPenaltyDeduction
+                });
+                
+                const record = exitRegistryMap[emp.id];
+                const currentStatus = record?.status || (emp.clearanceStatus === 'Approved' ? 'Clearance Approved' : 'Pending Clearance');
+
+                return (
+                  <div className="space-y-5">
+                    
+                    {/* Employee Exit Profile Card */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 dark:bg-slate-950 p-4 border rounded-xl">
+                      <div>
+                        <span className="text-slate-400 text-[10px]">Employee Name</span>
+                        <p className="font-bold text-slate-800 dark:text-white text-xs">{emp.name} ({emp.id})</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 text-[10px]">Designation Role</span>
+                        <p className="font-semibold text-slate-700 dark:text-slate-300 text-xs">{emp.role}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 text-[10px]">Resignation / Exit Date</span>
+                        <p className="font-semibold text-slate-700 dark:text-slate-300 text-xs">{exitResignationDate}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 text-[10px]">Clearance Status</span>
+                        <p className={`font-bold text-xs ${
+                          currentStatus === 'Clearance Approved' || currentStatus === 'Settled' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'
+                        }`}>
+                          {currentStatus}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* F&F Itemized Calculation Table */}
+                    <div className="border rounded-xl overflow-hidden shadow-2xs">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400 border-b font-bold uppercase text-[10px]">
+                          <tr>
+                            <th className="p-3">Salary Component / Settlement Item</th>
+                            <th className="p-3 text-right">Addition (+) Amount</th>
+                            <th className="p-3 text-right">Deduction (-) Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900">
+                          <tr>
+                            <td className="p-3 font-medium">Notice Period Pay ({details.noticeDays} Days)</td>
+                            <td className="p-3 text-right text-emerald-600 dark:text-emerald-400 font-bold">₹{details.noticePay.toLocaleString()}</td>
+                            <td className="p-3 text-right text-slate-400">-</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-medium">Accrued Leave Encashment ({details.leaveDays} Days)</td>
+                            <td className="p-3 text-right text-emerald-600 dark:text-emerald-400 font-bold">₹{details.leaveEncashment.toLocaleString()}</td>
+                            <td className="p-3 text-right text-slate-400">-</td>
+                          </tr>
+                          {details.gratuity > 0 ? (
+                            <tr>
+                              <td className="p-3 font-medium">Gratuity Settlement ({details.yearsWorked} Years Tenure Completed)</td>
+                              <td className="p-3 text-right text-emerald-600 dark:text-emerald-400 font-bold">₹{details.gratuity.toLocaleString()}</td>
+                              <td className="p-3 text-right text-slate-400">-</td>
+                            </tr>
+                          ) : (
+                            <tr>
+                              <td className="p-3 text-slate-400">Gratuity (Requires &gt; 5 years tenure)</td>
+                              <td className="p-3 text-right text-slate-400">₹0</td>
+                              <td className="p-3 text-right text-slate-400">-</td>
+                            </tr>
+                          )}
+                          <tr>
+                            <td className="p-3 font-medium">Provident Fund (PF) & Statutory Deductions</td>
+                            <td className="p-3 text-right text-slate-400">-</td>
+                            <td className="p-3 text-right text-rose-500 font-bold">₹{details.standardDeductions.toLocaleString()}</td>
+                          </tr>
+                          {details.penaltyDeduction > 0 && (
+                            <tr>
+                              <td className="p-3 font-medium text-rose-600 dark:text-rose-400">Unreturned Asset / Short Notice Penalty</td>
+                              <td className="p-3 text-right text-slate-400">-</td>
+                              <td className="p-3 text-right text-rose-600 font-bold">₹{details.penaltyDeduction.toLocaleString()}</td>
+                            </tr>
+                          )}
+                          
+                          {/* Total Breakdown Summary */}
+                          <tr className="bg-slate-50 dark:bg-slate-950 font-bold border-t">
+                            <td className="p-3 text-slate-800 dark:text-white">Gross Additions vs Deductions</td>
+                            <td className="p-3 text-right text-emerald-600">₹{details.totalEarnings.toLocaleString()}</td>
+                            <td className="p-3 text-right text-rose-500">₹{details.totalDeductions.toLocaleString()}</td>
+                          </tr>
+                          <tr className="bg-primary/10 dark:bg-primary/20 font-extrabold border-t-2 border-primary text-slate-900 dark:text-white">
+                            <td className="p-3.5 text-sm text-primary">Net Full & Final (F&F) Payable Settlement</td>
+                            <td className="p-3.5 text-right text-primary text-base" colSpan={2}>
+                              ₹{details.netPayable.toLocaleString()}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Resignation Note & Verification Footer */}
+                    <div className="p-3 border rounded-xl bg-slate-50 dark:bg-slate-950 text-[11px] text-slate-500 space-y-1">
+                      <p className="font-semibold text-slate-700 dark:text-slate-300">Resignation Reason Note:</p>
+                      <p className="italic">"{resignationReason}"</p>
+                    </div>
+
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* F&F Settlement Statement Modal */}
+          {showFFLetterModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div>
+                    <h3 className="font-bold text-slate-800 dark:text-white text-base">Official F&F Settlement Statement & Relieving Letter</h3>
+                    <p className="text-[10px] text-slate-400">Symbosys HR Management System - Final Clearance Record</p>
+                  </div>
+                  <button onClick={() => setShowFFLetterModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+                </div>
+
+                {(() => {
+                  const emp = employees.find(e => e.id === selectedExitEmpId) || employees[0];
+                  const details = calculateFullFinal(emp, {
+                    noticeDays: exitNoticeDays,
+                    leaveEncashDays: exitLeaveEncashDays,
+                    penaltyDeduction: exitPenaltyDeduction
+                  });
+
+                  return (
+                    <div className="space-y-4 text-xs text-slate-700 dark:text-slate-300 p-4 border rounded-xl bg-slate-50/50 dark:bg-slate-950/50">
+                      <div className="flex justify-between border-b pb-3 items-center">
+                        <div>
+                          <p className="font-bold text-slate-900 dark:text-white text-sm">SYMBOSYS TECHNOLOGIES PRIVATE LIMITED</p>
+                          <p className="text-[10px] text-slate-400">Corporate HR & Payroll Compliance Cell</p>
+                        </div>
+                        <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold px-3 py-1 rounded-full">APPROVED & CLEARED</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-[11px]">
+                        <p><span className="font-semibold text-slate-400">Employee ID:</span> {emp.id}</p>
+                        <p><span className="font-semibold text-slate-400">Employee Name:</span> {emp.name}</p>
+                        <p><span className="font-semibold text-slate-400">Designation:</span> {emp.role}</p>
+                        <p><span className="font-semibold text-slate-400">Department:</span> {emp.department}</p>
+                        <p><span className="font-semibold text-slate-400">Resignation Date:</span> {exitResignationDate}</p>
+                        <p><span className="font-semibold text-slate-400">Last Working Day:</span> {exitLastWorkingDay}</p>
+                      </div>
+
+                      <div className="border rounded-lg overflow-hidden bg-white dark:bg-slate-900 mt-2">
+                        <table className="w-full text-[11px] text-left">
+                          <thead className="bg-slate-100 dark:bg-slate-800 font-bold border-b">
+                            <tr>
+                              <th className="p-2">Component</th>
+                              <th className="p-2 text-right">Addition</th>
+                              <th className="p-2 text-right">Deduction</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            <tr>
+                              <td className="p-2">Notice Pay ({details.noticeDays} Days)</td>
+                              <td className="p-2 text-right text-emerald-600 font-bold">₹{details.noticePay.toLocaleString()}</td>
+                              <td className="p-2 text-right">-</td>
+                            </tr>
+                            <tr>
+                              <td className="p-2">Leave Encashment ({details.leaveDays} Days)</td>
+                              <td className="p-2 text-right text-emerald-600 font-bold">₹{details.leaveEncashment.toLocaleString()}</td>
+                              <td className="p-2 text-right">-</td>
+                            </tr>
+                            {details.gratuity > 0 && (
+                              <tr>
+                                <td className="p-2">Gratuity ({details.yearsWorked} Yrs Tenure)</td>
+                                <td className="p-2 text-right text-emerald-600 font-bold">₹{details.gratuity.toLocaleString()}</td>
+                                <td className="p-2 text-right">-</td>
+                              </tr>
+                            )}
+                            <tr>
+                              <td className="p-2">PF & Statutory Deductions</td>
+                              <td className="p-2 text-right">-</td>
+                              <td className="p-2 text-right text-rose-500 font-bold">₹{details.standardDeductions.toLocaleString()}</td>
+                            </tr>
+                            {details.penaltyDeduction > 0 && (
+                              <tr>
+                                <td className="p-2">Short Notice / Asset Penalty</td>
+                                <td className="p-2 text-right">-</td>
+                                <td className="p-2 text-right text-rose-500 font-bold">₹{details.penaltyDeduction.toLocaleString()}</td>
+                              </tr>
+                            )}
+                            <tr className="bg-slate-100 dark:bg-slate-800 font-extrabold border-t text-slate-900 dark:text-white">
+                              <td className="p-2.5">Net Payable Amount</td>
+                              <td className="p-2.5 text-right text-primary text-sm" colSpan={2}>₹{details.netPayable.toLocaleString()}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <p className="text-[10px] text-slate-400 italic pt-2">
+                        This is a computer-generated Full & Final Settlement summary approved by HR Administration.
+                      </p>
+
+                      <div className="flex justify-end gap-3 pt-3 border-t">
+                        <button onClick={() => window.print()} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-white rounded-xl font-bold hover:bg-slate-300">
+                          Print Statement
+                        </button>
+                        <button onClick={() => setShowFFLetterModal(false)} className="px-4 py-2 bg-primary text-white rounded-xl font-bold">
+                          Close Window
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* ======================================= */}
+      {/* 5.5 RESIGNATION & EXITED EMPLOYEES ARCHIVE */}
+      {/* ======================================= */}
+      {activeSubModule === 'resignation' && (
+        <div className="space-y-6 animate-fade-in text-xs">
+          
+          {/* Top Metric Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-rose-50 dark:bg-rose-950/20 p-4 rounded-xl border border-rose-100 dark:border-rose-900/30 shadow-2xs">
+              <span className="text-rose-600 dark:text-rose-400 font-bold uppercase text-[10px]">Total Resigned Employees</span>
+              <p className="text-2xl font-bold text-rose-700 dark:text-rose-300 mt-1">
+                {resignedEmployees.length}
+              </p>
+            </div>
+            <div className="bg-emerald-50 dark:bg-emerald-950/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-900/30 shadow-2xs">
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold uppercase text-[10px]">Clearance Approved & Settled</span>
+              <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">
+                {resignedEmployees.filter(e => e.clearanceStatus === 'Approved').length}
+              </p>
+            </div>
+            <div className="bg-amber-50 dark:bg-amber-950/20 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30 shadow-2xs">
+              <span className="text-amber-600 dark:text-amber-400 font-bold uppercase text-[10px]">Pending Clearance Exits</span>
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-300 mt-1">
+                {resignedEmployees.filter(e => e.clearanceStatus !== 'Approved').length}
+              </p>
+            </div>
+          </div>
+
+          {/* Search & Control Filter Bar */}
+          <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search resigned employee by name, role or ID..." 
+                value={resignationSearchTerm}
+                onChange={(e) => setResignationSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary/20 text-slate-700 dark:text-slate-300"
               />
             </div>
+            
+            <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+              <div className="flex items-center gap-1.5 border border-slate-200 dark:border-slate-800 rounded-lg px-2 bg-slate-50 dark:bg-slate-950">
+                <Filter className="h-3.5 w-3.5 text-slate-400" />
+                <select 
+                  value={resignationDeptFilter} 
+                  onChange={(e) => setResignationDeptFilter(e.target.value)}
+                  className="py-1.5 text-xs bg-transparent focus:outline-none text-slate-700 dark:text-slate-300 font-medium"
+                >
+                  <option value="All">All Departments</option>
+                  {departmentOptions.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
 
-            <div className="space-y-3.5 pt-2">
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">Clearance Checklist</span>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={itClearance} onChange={(e) => setItClearance(e.target.checked)} className="rounded text-primary focus:ring-0" />
-                <span className="text-slate-600 dark:text-slate-300 font-medium">IT Asset & System Revocation</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={financeClearance} onChange={(e) => setFinanceClearance(e.target.checked)} className="rounded text-primary focus:ring-0" />
-                <span className="text-slate-600 dark:text-slate-300 font-medium">Finance & Expense Claims Match</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={adminClearance} onChange={(e) => setAdminClearance(e.target.checked)} className="rounded text-primary focus:ring-0" />
-                <span className="text-slate-600 dark:text-slate-300 font-medium">Admin & Key Handover Completed</span>
-              </label>
+          {/* Resigned Employees Archive Table */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+            <div className="p-4 border-b flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-white text-sm">Resigned Employee Records Archive</h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">Exclusively displays exited personnel. Hidden from active directory.</p>
+              </div>
+              <span className="text-[11px] bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 font-bold px-2.5 py-1 rounded-full">
+                {filteredResignedEmployees.length} Exited Records
+              </span>
             </div>
 
-            <button 
-              onClick={handleProcessClearance}
-              disabled={!itClearance || !financeClearance || !adminClearance}
-              className="w-full py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold shadow-md shadow-rose-500/10 disabled:opacity-50"
-            >
-              Approve F&F Settlement
-            </button>
-          </div>
-
-          {/* Right Column: Full & Final Settlement Calculator Preview */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-2">
-            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Full & Final (F&F) Settlement Statement</h3>
-            {(() => {
-              const emp = employees.find(e => e.id === selectedExitEmpId);
-              if (!emp) return <p className="text-slate-400">Employee not found.</p>;
-              const details = calculateFullFinal(emp);
-              
-              return (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 dark:bg-slate-950 p-4 border rounded-xl">
-                    <div><span className="text-slate-400">Employee</span><p className="font-bold text-slate-850 dark:text-white">{emp.name}</p></div>
-                    <div><span className="text-slate-400">Designation</span><p className="font-semibold text-slate-700 dark:text-slate-300">{emp.role}</p></div>
-                    <div><span className="text-slate-400">Resigned On</span><p className="font-semibold text-slate-700 dark:text-slate-300">2026-06-30</p></div>
-                    <div><span className="text-slate-400">Clearance Status</span><p className="font-bold text-amber-500">{emp.clearanceStatus || "Pending Checks"}</p></div>
-                  </div>
-
-                  <div className="border rounded-xl overflow-hidden">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-slate-50 dark:bg-slate-950 text-slate-400 border-b font-semibold">
-                        <tr>
-                          <th className="p-3">Salary Component Item</th>
-                          <th className="p-3 text-right">Addition Amount</th>
-                          <th className="p-3 text-right">Deduction Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y text-slate-650 dark:text-slate-350">
-                        <tr>
-                          <td className="p-3">Notice Period Earned (1 Month)</td>
-                          <td className="p-3 text-right text-emerald-600 dark:text-emerald-400 font-medium">₹{details.earnings.toLocaleString()}</td>
-                          <td className="p-3 text-right">-</td>
-                        </tr>
-                        <tr>
-                          <td className="p-3">Leave Encashment (12 Accrued Days)</td>
-                          <td className="p-3 text-right text-emerald-600 dark:text-emerald-400 font-medium">₹{details.leaveEncash.toLocaleString()}</td>
-                          <td className="p-3 text-right">-</td>
-                        </tr>
-                        {details.gratuity > 0 && (
-                          <tr>
-                            <td className="p-3">Gratuity Settlement (5 Years completed)</td>
-                            <td className="p-3 text-right text-emerald-600 dark:text-emerald-400 font-medium">₹{details.gratuity.toLocaleString()}</td>
-                            <td className="p-3 text-right">-</td>
-                          </tr>
-                        )}
-                        <tr>
-                          <td className="p-3">Provident Fund Deducted</td>
-                          <td className="p-3 text-right">-</td>
-                          <td className="p-3 text-right text-rose-500 font-medium">₹{details.deductions.toLocaleString()}</td>
-                        </tr>
-                        <tr className="bg-slate-50 dark:bg-slate-950 font-bold text-slate-800 dark:text-white border-t">
-                          <td className="p-3 text-sm">Net Payable F&F Amount</td>
-                          <td className="p-3 text-right text-primary text-sm" colSpan={2}>
-                            ₹{details.netPayable.toLocaleString()}
+            {filteredResignedEmployees.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 space-y-2">
+                <User className="h-10 w-10 mx-auto text-slate-300 dark:text-slate-700" />
+                <p className="font-semibold text-slate-600 dark:text-slate-400 text-sm">No Resigned Employees Found</p>
+                <p className="text-[11px]">Employees who resigne or undergo exit management will appear exclusively in this section.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-950 text-slate-400 font-bold uppercase text-[10px]">
+                    <tr>
+                      <th className="p-3.5">Resigned Employee</th>
+                      <th className="p-3.5">Department & Role</th>
+                      <th className="p-3.5">Joining Date</th>
+                      <th className="p-3.5">Exit / Resignation Date</th>
+                      <th className="p-3.5">Clearance Status</th>
+                      <th className="p-3.5 text-right">Net F&F Payable</th>
+                      <th className="p-3.5 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filteredResignedEmployees.map(emp => {
+                      const exitRec = exitRegistryMap[emp.id];
+                      const ffCalc = calculateFullFinal(emp);
+                      return (
+                        <tr key={emp.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/40 transition-colors">
+                          <td className="p-3.5">
+                            <div className="flex items-center gap-3">
+                              <img src={emp.avatar} alt={emp.name} className="w-9 h-9 rounded-full object-cover border" />
+                              <div>
+                                <p className="font-bold text-slate-800 dark:text-white text-xs">{emp.name}</p>
+                                <p className="text-[10px] text-slate-400 font-mono">{emp.id} • {emp.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3.5">
+                            <p className="font-semibold text-slate-700 dark:text-slate-300">{emp.role}</p>
+                            <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded font-medium text-slate-600 dark:text-slate-400">
+                              {emp.department}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-slate-600 dark:text-slate-400 font-medium">
+                            {emp.joiningDate || 'N/A'}
+                          </td>
+                          <td className="p-3.5 font-semibold text-rose-600 dark:text-rose-400">
+                            {exitRec?.resignationDate || emp.exitDate || '2026-07-01'}
+                          </td>
+                          <td className="p-3.5">
+                            {emp.clearanceStatus === 'Approved' ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 px-2.5 py-1 rounded-full font-bold">
+                                <ShieldCheck className="h-3 w-3" /> F&F Approved
+                              </span>
+                            ) : (
+                              <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 px-2.5 py-1 rounded-full font-bold">
+                                Pending Clearance
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3.5 text-right font-extrabold text-slate-900 dark:text-white">
+                            ₹{ffCalc.netPayable.toLocaleString()}
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <button
+                              onClick={() => setSelectedResignedEmpId(emp.id)}
+                              className="px-3 py-1.5 bg-primary/10 hover:bg-primary text-primary hover:text-white rounded-lg font-bold transition-all text-[11px]"
+                            >
+                              View Full Details
+                            </button>
                           </td>
                         </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })()}
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
+
+          {/* Full Resigned Employee Details Modal */}
+          {selectedResignedEmpId && (() => {
+            const emp = resignedEmployees.find(e => e.id === selectedResignedEmpId);
+            if (!emp) return null;
+            const exitRec = exitRegistryMap[emp.id];
+            const ffCalc = calculateFullFinal(emp);
+            const famList = familyMembersMap[emp.id] || [];
+
+            return (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden animate-scale-up max-h-[90vh] flex flex-col">
+                  
+                  {/* Modal Header */}
+                  <div className="p-5 border-b bg-slate-50 dark:bg-slate-950 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <img src={emp.avatar} alt={emp.name} className="w-12 h-12 rounded-full object-cover border-2 border-primary/20" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-slate-900 dark:text-white text-base">{emp.name}</h3>
+                          <span className="text-[10px] bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 font-bold px-2 py-0.5 rounded-full uppercase">
+                            Resigned Employee
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 font-mono">{emp.id} • {emp.role} ({emp.department})</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedResignedEmpId(null)}
+                      className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs"
+                    >
+                      Close Details
+                    </button>
+                  </div>
+
+                  {/* Modal Body Content */}
+                  <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                    
+                    {/* Section 1: Exit Profile & Basic Overview */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50/70 dark:bg-slate-950/50 p-4 rounded-xl border">
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">Contact Information</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 text-xs mt-1">{emp.email}</p>
+                        <p className="text-slate-500 text-xs">{emp.phone || '+91 98765 43210'}</p>
+                        <p className="text-slate-500 text-xs mt-0.5">Location: {emp.location}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">Employment Dates</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200 text-xs mt-1">Joining: {emp.joiningDate || '2024-01-15'}</p>
+                        <p className="font-bold text-rose-600 dark:text-rose-400 text-xs">Resignation: {exitRec?.resignationDate || emp.exitDate || '2026-07-01'}</p>
+                        <p className="text-slate-500 text-xs">LWD: {exitRec?.lastWorkingDay || '2026-07-31'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">Clearance & F&F Status</p>
+                        <div className="mt-1">
+                          {emp.clearanceStatus === 'Approved' ? (
+                            <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full text-[10px]">
+                              Approved & Settled
+                            </span>
+                          ) : (
+                            <span className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-bold px-2.5 py-1 rounded-full text-[10px]">
+                              Pending Clearance Checklist
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-extrabold text-slate-900 dark:text-white text-sm mt-2">
+                          Net F&F Pay: ₹{ffCalc.netPayable.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Section 2: Resignation Parameters & Clearance Checkpoints */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-3 p-4 border rounded-xl bg-white dark:bg-slate-900">
+                        <h4 className="font-bold text-slate-800 dark:text-white text-xs border-b pb-2">Resignation Parameters & Rationale</h4>
+                        <div className="space-y-2 text-xs">
+                          <p><span className="font-semibold text-slate-400">Reason for Exit:</span> {exitRec?.reason || 'Career Advancement & Personal Rationale'}</p>
+                          <p><span className="font-semibold text-slate-400">Notice Days:</span> {exitRec?.noticeDays || 30} Days</p>
+                          <p><span className="font-semibold text-slate-400">Leave Encashment:</span> {exitRec?.leaveEncashDays || 12} Days</p>
+                          <p><span className="font-semibold text-slate-400">Penalty Deduction:</span> ₹{(exitRec?.penaltyDeduction || 0).toLocaleString()}</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 p-4 border rounded-xl bg-white dark:bg-slate-900">
+                        <h4 className="font-bold text-slate-800 dark:text-white text-xs border-b pb-2">Departmental Clearance Checkpoints</h4>
+                        <div className="space-y-2 text-xs">
+                          <div className="flex justify-between items-center">
+                            <span>IT Assets & Email Revocation:</span>
+                            <span className={exitRec?.itClearance ? "text-emerald-600 font-bold" : "text-amber-500 font-bold"}>
+                              {exitRec?.itClearance ? "✓ Completed" : "Pending"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span>Finance Expense & No Dues:</span>
+                            <span className={exitRec?.financeClearance ? "text-emerald-600 font-bold" : "text-amber-500 font-bold"}>
+                              {exitRec?.financeClearance ? "✓ Completed" : "Pending"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span>Admin Key & Access Return:</span>
+                            <span className={exitRec?.adminClearance ? "text-emerald-600 font-bold" : "text-amber-500 font-bold"}>
+                              {exitRec?.adminClearance ? "✓ Completed" : "Pending"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span>HR Exit Interview & Clearance:</span>
+                            <span className={exitRec?.hrClearance ? "text-emerald-600 font-bold" : "text-amber-500 font-bold"}>
+                              {exitRec?.hrClearance ? "✓ Completed" : "Pending"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 3: Full & Final Settlement Calculation */}
+                    <div className="space-y-3 p-4 border rounded-xl bg-white dark:bg-slate-900">
+                      <h4 className="font-bold text-slate-800 dark:text-white text-xs border-b pb-2">Full & Final (F&F) Settlement Computation</h4>
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 dark:bg-slate-950 font-bold text-slate-400 uppercase text-[10px]">
+                          <tr>
+                            <th className="p-2">Component</th>
+                            <th className="p-2 text-right">Additions</th>
+                            <th className="p-2 text-right">Deductions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y text-slate-700 dark:text-slate-300">
+                          <tr>
+                            <td className="p-2 font-medium">Notice Period Pay ({ffCalc.noticeDays} Days)</td>
+                            <td className="p-2 text-right text-emerald-600 font-bold">₹{ffCalc.noticePay.toLocaleString()}</td>
+                            <td className="p-2 text-right text-slate-400">-</td>
+                          </tr>
+                          <tr>
+                            <td className="p-2 font-medium">Leave Encashment ({ffCalc.leaveDays} Days)</td>
+                            <td className="p-2 text-right text-emerald-600 font-bold">₹{ffCalc.leaveEncashment.toLocaleString()}</td>
+                            <td className="p-2 text-right text-slate-400">-</td>
+                          </tr>
+                          {ffCalc.gratuity > 0 && (
+                            <tr>
+                              <td className="p-2 font-medium">Gratuity ({ffCalc.yearsWorked} Yrs Service)</td>
+                              <td className="p-2 text-right text-emerald-600 font-bold">₹{ffCalc.gratuity.toLocaleString()}</td>
+                              <td className="p-2 text-right text-slate-400">-</td>
+                            </tr>
+                          )}
+                          <tr>
+                            <td className="p-2 font-medium">PF & Statutory Deductions</td>
+                            <td className="p-2 text-right text-slate-400">-</td>
+                            <td className="p-2 text-right text-rose-500 font-bold">₹{ffCalc.standardDeductions.toLocaleString()}</td>
+                          </tr>
+                          {ffCalc.penaltyDeduction > 0 && (
+                            <tr>
+                              <td className="p-2 font-medium text-rose-600">Asset Penalty / Short Notice</td>
+                              <td className="p-2 text-right text-slate-400">-</td>
+                              <td className="p-2 text-right text-rose-600 font-bold">₹{ffCalc.penaltyDeduction.toLocaleString()}</td>
+                            </tr>
+                          )}
+                          <tr className="bg-primary/10 font-extrabold border-t text-slate-900 dark:text-white">
+                            <td className="p-3 text-primary text-xs">Total Net Settlement Amount</td>
+                            <td className="p-3 text-right text-primary text-sm font-bold" colSpan={2}>
+                              ₹{ffCalc.netPayable.toLocaleString()}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Section 4: Family & Dependents Info */}
+                    {famList.length > 0 && (
+                      <div className="space-y-3 p-4 border rounded-xl bg-white dark:bg-slate-900">
+                        <h4 className="font-bold text-slate-800 dark:text-white text-xs border-b pb-2">Family & Dependents Record</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                          {famList.map(fam => (
+                            <div key={fam.id} className="p-2.5 border rounded-lg bg-slate-50 dark:bg-slate-950 flex justify-between items-center">
+                              <div>
+                                <p className="font-bold text-slate-800 dark:text-slate-200">{fam.name} ({fam.relation})</p>
+                                <p className="text-[10px] text-slate-400">DOB: {fam.dob || 'N/A'} • Blood Group: {fam.bloodGroup || 'O+'}</p>
+                              </div>
+                              {fam.isNominee && (
+                                <span className="text-[9px] bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 font-bold px-2 py-0.5 rounded">Nominee</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+
+                  {/* Modal Footer Actions */}
+                  <div className="p-4 border-t bg-slate-50 dark:bg-slate-950 flex justify-between items-center">
+                    <button 
+                      onClick={() => window.print()} 
+                      className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 text-slate-800 dark:text-white rounded-xl font-bold text-xs"
+                    >
+                      Print Resignation & F&F Summary
+                    </button>
+                    <button 
+                      onClick={() => setSelectedResignedEmpId(null)} 
+                      className="px-4 py-2 bg-primary text-white rounded-xl font-bold text-xs hover:bg-primary/90"
+                    >
+                      Done
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+            );
+          })()}
+
         </div>
       )}
 

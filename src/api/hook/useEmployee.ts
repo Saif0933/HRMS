@@ -402,3 +402,80 @@ export const useDeleteEmployeeFamily = () => {
     },
   });
 };
+
+export interface EmployeeExitRecord {
+  id?: string;
+  employeeId: string;
+  resignationDate: string;
+  lastWorkingDay: string;
+  reason?: string | null;
+  noticeDays: number;
+  leaveEncashDays: number;
+  penaltyDeduction: number;
+  itClearance: boolean;
+  financeClearance: boolean;
+  adminClearance: boolean;
+  hrClearance: boolean;
+  status: string;
+  settledDate?: string | null;
+  netPayable?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Hook to retrieve employee exit & clearance details
+ * GET /api/v1/employees/:id/exit
+ */
+export const useEmployeeExit = (employeeId?: string) => {
+  return useQuery<BaseResponse<EmployeeExitRecord | null>, Error>({
+    queryKey: ['employee', employeeId, 'exit'],
+    queryFn: async () => {
+      if (!employeeId) throw new Error('Employee ID is required');
+      const response = await apiClient.get<BaseResponse<EmployeeExitRecord | null>>(`/employees/${employeeId}/exit`);
+      return response.data;
+    },
+    enabled: !!employeeId,
+  });
+};
+
+/**
+ * Hook to create or update employee exit & clearance record
+ * POST /api/v1/employees/:id/exit
+ */
+export const useSaveEmployeeExit = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    BaseResponse<EmployeeExitRecord>,
+    Error,
+    {
+      employeeId: string;
+      data: {
+        resignationDate: string;
+        lastWorkingDay: string;
+        reason?: string | null;
+        noticeDays?: number;
+        leaveEncashDays?: number;
+        penaltyDeduction?: number;
+        itClearance?: boolean;
+        financeClearance?: boolean;
+        adminClearance?: boolean;
+        hrClearance?: boolean;
+        status?: string;
+        settledDate?: string | null;
+        netPayable?: number | null;
+      };
+    }
+  >({
+    mutationFn: async ({ employeeId, data }) => {
+      const response = await apiClient.post<BaseResponse<EmployeeExitRecord>>(`/employees/${employeeId}/exit`, data);
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['employee', variables.employeeId] });
+      queryClient.invalidateQueries({ queryKey: ['employee', variables.employeeId, 'exit'] });
+    },
+  });
+};
