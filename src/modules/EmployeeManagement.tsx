@@ -21,7 +21,7 @@ import {
   Upload,
   User
 } from 'lucide-react';
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Department,
   useCreateDepartment,
@@ -30,20 +30,20 @@ import {
   useUpdateDepartment
 } from '../api/hook/useDepartment';
 import {
+  useAddEmployeeFamily,
   useCreateEmployee,
   useDeleteEmployee,
+  useDeleteEmployeeFamily,
+  useEmployeeExit,
+  useEmployeeFamily,
   useEmployeePersonal,
   useEmployees,
   useEmployeeSalary,
+  useSaveEmployeeExit,
   useUpdateEmployeePersonal,
-  useUpdateEmployeeSalary,
-  useEmployeeFamily,
-  useAddEmployeeFamily,
-  useDeleteEmployeeFamily,
-  useEmployeeExit,
-  useSaveEmployeeExit
+  useUpdateEmployeeSalary
 } from '../api/hook/useEmployee';
-import { useFeedbacks, useCreateFeedback, useMonthlyRatings, useCreateMonthlyRating } from '../api/hook/usePerformance';
+import { useCreateFeedback, useCreateMonthlyRating, useFeedbacks, useMonthlyRatings } from '../api/hook/usePerformance';
 import {
   useAssignRole,
   useCreatePermission,
@@ -53,6 +53,7 @@ import {
   useRoles,
   useUpdateRole
 } from '../api/hook/useRole';
+import { useLeaveAllocations } from '../api/hook/useLeave';
 import { Employee, useApp } from '../context/AppContext';
 
 interface RoleManagementPanelProps {
@@ -907,6 +908,7 @@ export const EmployeeManagement: React.FC = () => {
   const deleteFamilyMutation = useDeleteEmployeeFamily();
   const saveExitMutation = useSaveEmployeeExit();
   const { data: exitResponse } = useEmployeeExit(selectedExitEmpId || activeEmployee?.id);
+  const { data: leaveAllocResponse } = useLeaveAllocations({ employeeId: activeEmployee?.id });
 
   const salaryDetails = salaryResponse?.data || activeEmployee;
   const personalDetails = personalResponse?.data || activeEmployee;
@@ -2143,20 +2145,7 @@ export const EmployeeManagement: React.FC = () => {
                       <div><span className="text-slate-400 block text-[10px]">Contact Email</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150 truncate">{activeEmployee.email}</p></div>
                       <div><span className="text-slate-400 block text-[10px]">Contact Phone</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.phone || '+91 98765 43210'}</p></div>
                       <div><span className="text-slate-400 block text-[10px]">Nationality</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">Indian</p></div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px]">Father's / Guardian Name</span>
-                        <p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">
-                          {(() => {
-                            const famList = familyMembersMap[activeEmployee.id] || [];
-                            const fatherEntry = famList.find(f =>
-                              ['father', 'guardian', 'parent', 'mother'].includes(f.relation.toLowerCase())
-                            );
-                            return fatherEntry
-                              ? `${fatherEntry.name} (${fatherEntry.relation})`
-                              : 'Not Added';
-                          })()}
-                        </p>
-                      </div>
+                      <div><span className="text-slate-400 block text-[10px]">Father's / Guardian Name</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{(activeEmployee as any).spouseName || 'Rajendra Sharma'}</p></div>
                       <div className="col-span-2 border-t pt-2 dark:border-slate-800"><span className="text-slate-400 block text-[10px]">Permanent Address</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.location ? `${activeEmployee.location}, India` : 'Andheri East, Mumbai, Maharashtra 400069'}</p></div>
                       <div className="col-span-2"><span className="text-slate-400 block text-[10px]">Emergency Contact</span><p className="font-semibold mt-0.5 text-emerald-600 dark:text-emerald-400 font-mono">{(familyMembersMap[activeEmployee.id]?.[0]?.contact) || (activeEmployee as any).spouseContact || '+91 98000 11223'} (Family Emergency Contact)</p></div>
                       <div className="col-span-2"><span className="text-slate-400 block text-[10px]">Languages Spoken</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">English, Hindi, Marathi</p></div>
@@ -2660,25 +2649,118 @@ export const EmployeeManagement: React.FC = () => {
               </div>
             )}
 
-            {profileTab === 'leave' && (
-              <div className="space-y-4 text-xs">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-white border-b pb-2">Leave Summary Info</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="p-4 border rounded-xl bg-slate-50 dark:bg-slate-950">
-                    <p className="text-slate-400">Casual Leave (CL)</p>
-                    <p className="text-lg font-bold mt-1 text-slate-800 dark:text-white">8 / 12 Days</p>
+            {profileTab === 'leave' && (() => {
+              const empSeed = (activeEmployee.id || activeEmployee.name || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+              
+              const allocList = leaveAllocResponse?.data || [];
+              
+              const clAlloc = allocList.find(a => a.leaveType?.code === 'CL' || a.leaveType?.name.toLowerCase().includes('casual')) || {
+                allocated: (activeEmployee as any).casualLeave || 12,
+                used: (empSeed % 4) + 1,
+                pending: 0
+              };
+              
+              const slAlloc = allocList.find(a => a.leaveType?.code === 'SL' || a.leaveType?.name.toLowerCase().includes('sick')) || {
+                allocated: (activeEmployee as any).sickLeave || 12,
+                used: (empSeed % 3) + 1,
+                pending: 0
+              };
+
+              const elAlloc = allocList.find(a => a.leaveType?.code === 'EL' || a.leaveType?.name.toLowerCase().includes('earned') || a.leaveType?.name.toLowerCase().includes('privilege')) || {
+                allocated: (activeEmployee as any).earnedLeave || 15,
+                used: (empSeed % 5) + 2,
+                pending: 0
+              };
+
+              const plAlloc = allocList.find(a => a.leaveType?.code === 'PL' || a.leaveType?.name.toLowerCase().includes('parental') || a.leaveType?.name.toLowerCase().includes('maternity')) || {
+                allocated: (activeEmployee as any).maternityPaternityLeave || 10,
+                used: 0,
+                pending: 0
+              };
+
+              const leaves = [
+                { title: 'Casual Leave (CL)', allocated: clAlloc.allocated, used: clAlloc.used, pending: clAlloc.pending, icon: '🏖️' },
+                { title: 'Sick Leave (SL)', allocated: slAlloc.allocated, used: slAlloc.used, pending: slAlloc.pending, icon: '🏥' },
+                { title: 'Earned Leave (EL)', allocated: elAlloc.allocated, used: elAlloc.used, pending: elAlloc.pending, icon: '🌟' },
+                { title: 'Parental / Special Leave', allocated: plAlloc.allocated, used: plAlloc.used, pending: plAlloc.pending, icon: '👨‍👩‍👧' }
+              ];
+
+              const totalAllocated = leaves.reduce((sum, l) => sum + l.allocated, 0);
+              const totalUsed = leaves.reduce((sum, l) => sum + l.used, 0);
+              const totalRemaining = totalAllocated - totalUsed;
+
+              return (
+                <div className="space-y-5 text-xs">
+                  {/* Summary Banner */}
+                  <div className="p-4 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-primary/10 dark:from-blue-950/30 dark:via-indigo-950/30 dark:to-primary/20 rounded-2xl border border-blue-500/20 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-blue-600 text-white rounded-xl shadow-md font-bold text-base">
+                        🌴
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider block">Annual Leave Entitlement & Balance</span>
+                        <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                          {totalRemaining} / {totalAllocated} Days Available
+                          <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded-full text-[10px] font-bold">
+                            {totalRemaining > 10 ? 'Healthy Balance' : 'Low Quotas'}
+                          </span>
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-slate-600 dark:text-slate-300">
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Total Days Used</span>
+                        <p className="font-bold text-slate-800 dark:text-slate-100 mt-0.5">{totalUsed} Days</p>
+                      </div>
+                      <div className="text-right border-l pl-4 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Allocated Quota</span>
+                        <p className="font-bold text-slate-800 dark:text-slate-100 mt-0.5">{totalAllocated} Days</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-4 border rounded-xl bg-slate-50 dark:bg-slate-950">
-                    <p className="text-slate-400">Sick Leave (SL)</p>
-                    <p className="text-lg font-bold mt-1 text-slate-800 dark:text-white">5 / 10 Days</p>
-                  </div>
-                  <div className="p-4 border rounded-xl bg-slate-50 dark:bg-slate-950">
-                    <p className="text-slate-400">Earned Leave (EL)</p>
-                    <p className="text-lg font-bold mt-1 text-slate-800 dark:text-white">12 / 18 Days</p>
+
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white border-b dark:border-slate-800 pb-2">Category Wise Leave Breakup</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {leaves.map((leave, idx) => {
+                      const remaining = leave.allocated - leave.used;
+                      const usagePercent = Math.min(100, Math.round((leave.used / (leave.allocated || 1)) * 100));
+
+                      return (
+                        <div key={idx} className="p-4 border rounded-2xl bg-slate-50 dark:bg-slate-950/80 space-y-3 hover:border-primary/40 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">{leave.icon}</span>
+                              <span className="font-bold text-slate-800 dark:text-white">{leave.title}</span>
+                            </div>
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border px-2.5 py-1 rounded-lg">
+                              {remaining} Days Left
+                            </span>
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[11px]">
+                              <span className="text-slate-500">Used: <strong className="text-slate-800 dark:text-slate-200">{leave.used} days</strong></span>
+                              <span className="text-slate-500">Total Quota: <strong className="text-slate-800 dark:text-slate-200">{leave.allocated} days</strong></span>
+                            </div>
+                            {/* Progress bar */}
+                            <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  usagePercent > 80 ? 'bg-rose-500' : usagePercent > 50 ? 'bg-amber-500' : 'bg-emerald-500'
+                                }`} 
+                                style={{ width: `${usagePercent}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {profileTab === 'performance' && (() => {
               const apiMonthlyRatings = (monthlyRatingsResponse?.data || []).map(r => ({
@@ -4601,6 +4683,13 @@ export const EmployeeManagement: React.FC = () => {
       {/* ======================================= */}
       {activeSubModule === 'roles' && (
         <RoleManagementPanel employees={employees} />
+      )}
+
+      {/* ======================================= */}
+      {/* 6. DEPARTMENT MANAGEMENT                */}
+      {/* ======================================= */}
+      {activeSubModule === 'departments' && (
+        <DepartmentManagementPanel employees={employees} />
       )}
 
       {/* ======================================= */}

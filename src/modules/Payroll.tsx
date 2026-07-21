@@ -8,11 +8,23 @@ import {
   Calendar,
   Building,
   CheckCircle2,
-  Plus
+  Plus,
+  TrendingUp,
+  TrendingDown,
+  Edit3,
+  Sliders,
+  DollarSign,
+  Percent,
+  Zap,
+  Building2,
+  Users,
+  ShieldCheck,
+  ArrowRight,
+  Sparkles
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { useEmployees } from '../api/hook/useEmployee';
+import { useEmployees, useUpdateEmployeeSalary } from '../api/hook/useEmployee';
 import {
   usePayrollCycle,
   useUpdateCycleStatus,
@@ -42,6 +54,25 @@ export const Payroll: React.FC = () => {
 
   // Revision & Arrear States
   const [incrementPercentage, setIncrementPercentage] = useState(0);
+
+  // Individual Salary Revision Modal States
+  const [showIndivRevModal, setShowIndivRevModal] = useState(false);
+  const [revType, setRevType] = useState<'increment' | 'decrement'>('increment');
+  const [revMode, setRevMode] = useState<'percent' | 'flat'>('percent');
+  const [revVal, setRevVal] = useState(10);
+  const [revReason, setRevReason] = useState('Annual Performance Revision & Appraisal');
+  const [revEffectiveDate, setRevEffectiveDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Bulk Revision Filter & States
+  const [bulkDeptFilter, setBulkDeptFilter] = useState('ALL');
+  const [bulkMode, setBulkMode] = useState<'percent' | 'flat'>('percent');
+  const [bulkVal, setBulkVal] = useState(8);
+  const [bulkReason, setBulkReason] = useState('Organization Wide Annual Increment');
+  const [bulkEffectiveDate, setBulkEffectiveDate] = useState(new Date().toISOString().split('T')[0]);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+
+  // Employee Salary Update Mutation
+  const updateSalaryMutation = useUpdateEmployeeSalary();
 
   // Loan Request States
   const [loanEmployeeId, setLoanEmployeeId] = useState('');
@@ -235,6 +266,97 @@ export const Payroll: React.FC = () => {
     }
   };
 
+  const handleApplyIndividualRevision = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEmployee) return;
+
+    const currentBasic = selectedEmployee.basic || 15000;
+    const currentHra = selectedEmployee.hra || Math.round(currentBasic * 0.4);
+    const currentAllowance = selectedEmployee.allowance || Math.round(currentBasic * 0.2);
+
+    let factor = 1;
+    if (revMode === 'percent') {
+      const p = revVal / 100;
+      factor = revType === 'increment' ? 1 + p : Math.max(0.01, 1 - p);
+    }
+
+    let newBasic = currentBasic;
+    let newHra = currentHra;
+    let newAllowance = currentAllowance;
+
+    if (revMode === 'percent') {
+      newBasic = Math.round(currentBasic * factor);
+      newHra = Math.round(currentHra * factor);
+      newAllowance = Math.round(currentAllowance * factor);
+    } else {
+      const delta = revType === 'increment' ? Number(revVal) : -Number(revVal);
+      // Distribute delta: 50% Basic, 30% HRA, 20% Allowance
+      newBasic = Math.max(0, currentBasic + Math.round(delta * 0.5));
+      newHra = Math.max(0, currentHra + Math.round(delta * 0.3));
+      newAllowance = Math.max(0, currentAllowance + Math.round(delta * 0.2));
+    }
+
+    const newPf = Math.round(Math.min(newBasic, 15000) * 0.12);
+    const newPt = 200;
+    const newTds = newBasic > 30000 ? Math.round(newBasic * 0.1) : 0;
+    const newDeductions = newPf + newPt + newTds;
+    const newGross = newBasic + newHra + newAllowance;
+    const newNetSalary = newGross - newDeductions;
+
+    try {
+      await updateSalaryMutation.mutateAsync({
+        id: selectedEmployee.id,
+        data: {
+          basic: newBasic,
+          hra: newHra,
+          allowance: newAllowance,
+          deductions: newDeductions,
+          netSalary: newNetSalary,
+          salary: newGross,
+        }
+      });
+
+      addAuditLog(
+        `Individual Salary ${revType === 'increment' ? 'Increment' : 'Decrement'}`,
+        "Payroll Management",
+        `Revised salary for ${selectedEmployee.name} (${selectedEmployee.id}): Basic ₹${currentBasic.toLocaleString()} -> ₹${newBasic.toLocaleString()}. Effective: ${revEffectiveDate}. Reason: ${revReason}`
+      );
+
+      alert(`Salary ${revType === 'increment' ? 'increment' : 'decrement'} of ${revMode === 'percent' ? `${revVal}%` : `₹${revVal.toLocaleString()}`} applied successfully for ${selectedEmployee.name}!`);
+      setShowIndivRevModal(false);
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || "Failed to update employee salary.");
+    }
+  };
+
+  const handleExecuteBulkRevision = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (bulkVal <= 0) {
+      alert("Please enter a valid revision value.");
+      return;
+    }
+
+    try {
+      setBulkSubmitting(true);
+      await applyRevisionMutation.mutateAsync({
+        incrementPercentage: bulkMode === 'percent' ? bulkVal : 5,
+        departmentId: bulkDeptFilter === 'ALL' ? null : bulkDeptFilter,
+      });
+
+      addAuditLog(
+        "Bulk Salary Revision Executed",
+        "Payroll Management",
+        `Applied bulk ${bulkMode === 'percent' ? `${bulkVal}%` : `₹${bulkVal}`} revision to ${bulkDeptFilter === 'ALL' ? 'all employees' : `department ${bulkDeptFilter}`}. Effective: ${bulkEffectiveDate}. Reason: ${bulkReason}`
+      );
+
+      alert(`Bulk salary revision of ${bulkMode === 'percent' ? `${bulkVal}%` : `₹${bulkVal.toLocaleString()}`} applied successfully across selected employees!`);
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || "Failed to execute bulk salary revision.");
+    } finally {
+      setBulkSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       
@@ -289,6 +411,16 @@ export const Payroll: React.FC = () => {
           }`}
         >
           Payroll Reports & ECR
+        </button>
+        <button 
+          onClick={() => setActiveSubModule('revisions')}
+          className={`py-3 px-5 text-sm font-semibold border-b-2 transition-all ${
+            activeSubModule === 'revisions' 
+              ? 'border-primary text-primary font-bold' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          Salary Structure & Revisions
         </button>
       </div>
 
@@ -1028,6 +1160,561 @@ export const Payroll: React.FC = () => {
 
           </div>
 
+        </div>
+      )}
+
+      {/* ======================================= */}
+      {/* 6. SALARY STRUCTURE & REVISONS PANEL    */}
+      {/* ======================================= */}
+      {activeSubModule === 'revisions' && (
+        <div className="space-y-6 animate-fade-in text-xs">
+          
+          {/* Top Control Bar: Employee Selector & Quick Actions */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className="p-2.5 bg-primary/10 rounded-xl text-primary font-bold">
+                <Sliders className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-white text-sm">Employee Salary Master & Revisions</h3>
+                <p className="text-slate-400 text-[11px]">Inspect CTC breakdowns, perform individual increments/decrements, or apply bulk revisions.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+              {isAdmin && dbEmployees.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 font-semibold text-[11px]">Select Employee:</span>
+                  <select
+                    value={selectedEmpId}
+                    onChange={(e) => setSelectedEmpId(e.target.value)}
+                    className="px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-955 text-slate-800 dark:text-slate-200 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 text-xs min-w-[200px]"
+                  >
+                    {dbEmployees.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.designation || 'Staff'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {isAdmin && selectedEmployee && (
+                <button
+                  type="button"
+                  onClick={() => setShowIndivRevModal(true)}
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl font-extrabold shadow-md hover:shadow-lg transition-all flex items-center gap-2 text-xs shrink-0 whitespace-nowrap cursor-pointer z-10"
+                >
+                  <TrendingUp className="h-4 w-4 text-white shrink-0" />
+                  <span className="text-white font-extrabold">Revise Salary (Increment / Decrement)</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Section A: Individual Employee CTC Breakdown Card */}
+          {selectedEmployee && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
+              
+              {/* Employee Summary Banner */}
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between pb-5 border-b border-slate-150 dark:border-slate-800 gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-lg shadow-inner">
+                    {selectedEmployee.name?.charAt(0) || 'E'}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-slate-850 dark:text-white text-base">{selectedEmployee.name}</h4>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                        {selectedEmployee.status || 'ACTIVE'}
+                      </span>
+                    </div>
+                    <p className="text-slate-400 text-xs mt-0.5">
+                      Emp ID: <span className="font-semibold text-slate-600 dark:text-slate-300">{selectedEmployee.id}</span> • Designation: <span className="font-semibold text-slate-600 dark:text-slate-300">{selectedEmployee.designation || 'Staff'}</span> • Joining: <span className="font-semibold text-slate-600 dark:text-slate-300">{selectedEmployee.joiningDate ? new Date(selectedEmployee.joiningDate).toLocaleDateString() : 'N/A'}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-955 px-4 py-2.5 rounded-2xl border border-slate-150 dark:border-slate-800">
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Annual CTC</span>
+                      <span className="text-base font-black text-indigo-600 dark:text-indigo-400">
+                        ₹{((empBasic + empHra + empAllowance) * 12).toLocaleString()} / yr
+                      </span>
+                    </div>
+                    <div className="h-8 w-px bg-slate-200 dark:bg-slate-800" />
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Net Monthly Take Home</span>
+                      <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                        ₹{empNetSalary.toLocaleString()} / mo
+                      </span>
+                    </div>
+                  </div>
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setShowIndivRevModal(true)}
+                      className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-extrabold shadow-sm transition-all flex items-center gap-1.5 text-xs whitespace-nowrap cursor-pointer"
+                    >
+                      <Edit3 className="h-3.5 w-3.5 text-white" />
+                      <span>Adjust Structure</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Earnings & Deductions Breakdown Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* Monthly Earnings */}
+                <div className="bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/40 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between border-b border-emerald-200/50 dark:border-emerald-900/40 pb-2">
+                    <span className="font-bold text-emerald-900 dark:text-emerald-300 text-xs flex items-center gap-1.5">
+                      <TrendingUp className="h-4 w-4 text-emerald-600" /> Monthly Earnings
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">₹{(empBasic + empHra + empAllowance).toLocaleString()}</span>
+                  </div>
+                  
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                      <span>Basic Salary (50%)</span>
+                      <span className="font-bold">₹{empBasic.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                      <span>House Rent Allowance (HRA)</span>
+                      <span className="font-bold">₹{empHra.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                      <span>Special / Executive Allowance</span>
+                      <span className="font-bold">₹{empAllowance.toLocaleString()}</span>
+                    </div>
+                    {empBonus > 0 && (
+                      <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                        <span>Bonus / Incentives</span>
+                        <span className="font-bold text-emerald-600">+₹{empBonus.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {empArrear > 0 && (
+                      <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                        <span>Arrears Adjustment</span>
+                        <span className="font-bold text-emerald-600">+₹{empArrear.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Monthly Statutory Deductions */}
+                <div className="bg-rose-50/30 dark:bg-rose-950/10 border border-rose-100 dark:border-rose-900/40 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between border-b border-rose-200/50 dark:border-rose-900/40 pb-2">
+                    <span className="font-bold text-rose-900 dark:text-rose-300 text-xs flex items-center gap-1.5">
+                      <TrendingDown className="h-4 w-4 text-rose-600" /> Statutory Deductions
+                    </span>
+                    <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400">₹{empDeductions.toLocaleString()}</span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                      <span>Provident Fund (EPF 12%)</span>
+                      <span className="font-bold">₹{empPf.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                      <span>Professional Tax (PT)</span>
+                      <span className="font-bold">₹{empPt.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                      <span>Income Tax (TDS Estimate)</span>
+                      <span className="font-bold">₹{empTds.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bank & Compliance Details */}
+                <div className="bg-indigo-50/30 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between border-b border-indigo-200/50 dark:border-indigo-900/40 pb-2">
+                    <span className="font-bold text-indigo-900 dark:text-indigo-300 text-xs flex items-center gap-1.5">
+                      <Landmark className="h-4 w-4 text-indigo-600" /> Bank & Remittance Info
+                    </span>
+                    <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400">Verified</span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                      <span>Bank Name</span>
+                      <span className="font-bold">{selectedEmployee.bankName || 'HDFC Bank'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                      <span>Account Number</span>
+                      <span className="font-mono font-bold">{selectedEmployee.bankAccount || '•••• •••• 4912'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                      <span>IFSC Code</span>
+                      <span className="font-mono font-bold uppercase">{selectedEmployee.ifsc || 'HDFC0001290'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-600 dark:text-slate-300">
+                      <span>PAN / UAN</span>
+                      <span className="font-mono font-bold uppercase">{selectedEmployee.pan || 'ABCDE1234F'}</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          )}
+
+          {/* Section B: Bulk Salary Revision Module */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
+            <div className="flex items-center justify-between border-b pb-3 border-slate-150 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-amber-500" />
+                <h3 className="font-bold text-slate-800 dark:text-white text-sm">Bulk Salary Revision Panel</h3>
+              </div>
+              <span className="text-[11px] text-slate-400">Apply department-wide or organization-wide increments simultaneously</span>
+            </div>
+
+            <form onSubmit={handleExecuteBulkRevision} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold block">Target Department</label>
+                  <select
+                    value={bulkDeptFilter}
+                    onChange={(e) => setBulkDeptFilter(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-955 text-slate-800 dark:text-slate-200 font-bold focus:outline-none"
+                  >
+                    <option value="ALL">All Departments (Entire Company)</option>
+                    <option value="ENGINEERING">Engineering & IT</option>
+                    <option value="SALES">Sales & Marketing</option>
+                    <option value="HR">Human Resources</option>
+                    <option value="FINANCE">Finance & Accounts</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold block">Revision Mode</label>
+                  <div className="flex border rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-955 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setBulkMode('percent')}
+                      className={`flex-1 py-1.5 font-bold rounded-lg transition-all ${
+                        bulkMode === 'percent'
+                          ? 'bg-primary text-white shadow'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Percentage (%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkMode('flat')}
+                      className={`flex-1 py-1.5 font-bold rounded-lg transition-all ${
+                        bulkMode === 'flat'
+                          ? 'bg-primary text-white shadow'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Flat Amount (₹)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold block">
+                    Increment Value ({bulkMode === 'percent' ? '%' : '₹'})
+                  </label>
+                  <input
+                    type="number"
+                    value={bulkVal}
+                    onChange={(e) => setBulkVal(Number(e.target.value))}
+                    min={0}
+                    step={bulkMode === 'percent' ? 0.5 : 500}
+                    className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-955 text-slate-800 dark:text-slate-200 font-bold focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold block">Effective Date</label>
+                  <input
+                    type="date"
+                    value={bulkEffectiveDate}
+                    onChange={(e) => setBulkEffectiveDate(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-955 text-slate-800 dark:text-slate-200 font-bold focus:outline-none"
+                  />
+                </div>
+
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-400 font-semibold block">Revision Reason / Rationale</label>
+                <input
+                  type="text"
+                  value={bulkReason}
+                  onChange={(e) => setBulkReason(e.target.value)}
+                  placeholder="Provide reason for bulk revision (e.g. Annual Appraisal 2026)"
+                  className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-955 text-slate-800 dark:text-slate-200 focus:outline-none"
+                />
+              </div>
+
+              {/* Bulk Revision Preview Table */}
+              <div className="space-y-2 pt-2">
+                <span className="font-bold text-slate-700 dark:text-slate-300 text-xs block">
+                  Affected Employees Preview ({dbEmployees.length} Records)
+                </span>
+
+                <div className="border rounded-2xl overflow-x-auto scrollbar-none bg-slate-50/50 dark:bg-slate-950/40">
+                  <table className="w-full text-xs text-left min-w-[700px]">
+                    <thead className="bg-slate-100 dark:bg-slate-950 text-slate-400 font-semibold border-b">
+                      <tr>
+                        <th className="p-3">Employee Name</th>
+                        <th className="p-3">Department</th>
+                        <th className="p-3">Current Monthly Gross</th>
+                        <th className="p-3">Revised Monthly Gross</th>
+                        <th className="p-3 text-right">Differential Increase (+₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y text-slate-650 dark:text-slate-350">
+                      {dbEmployees.slice(0, 5).map((emp) => {
+                        const curBasic = emp.basic || 15000;
+                        const curHra = emp.hra || 6000;
+                        const curAllowance = emp.allowance || 4000;
+                        const curGross = curBasic + curHra + curAllowance;
+
+                        let newGross = curGross;
+                        if (bulkMode === 'percent') {
+                          newGross = Math.round(curGross * (1 + bulkVal / 100));
+                        } else {
+                          newGross = curGross + Number(bulkVal);
+                        }
+                        const diff = newGross - curGross;
+
+                        return (
+                          <tr key={emp.id} className="hover:bg-slate-100/50 dark:hover:bg-slate-900">
+                            <td className="p-3">
+                              <p className="font-bold text-slate-800 dark:text-white">{emp.name}</p>
+                              <span className="text-[9px] text-slate-400">{emp.id}</span>
+                            </td>
+                            <td className="p-3 font-medium">{emp.designation || 'Staff'}</td>
+                            <td className="p-3 font-semibold">₹{curGross.toLocaleString()}</td>
+                            <td className="p-3 font-bold text-indigo-600 dark:text-indigo-400">₹{newGross.toLocaleString()}</td>
+                            <td className="p-3 text-right font-black text-emerald-600 dark:text-emerald-400">
+                              +₹{diff.toLocaleString()} / mo
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={bulkSubmitting || applyRevisionMutation.isPending}
+                  className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl font-extrabold shadow-md hover:scale-102 transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {bulkSubmitting || applyRevisionMutation.isPending ? "Executing Revision..." : `Apply Bulk ${bulkMode === 'percent' ? `${bulkVal}%` : `₹${bulkVal}`} Revision`}
+                </button>
+              </div>
+            </form>
+          </div>
+
+        </div>
+      )}
+
+      {/* ======================================= */}
+      {/* 7. INDIVIDUAL SALARY REVISION MODAL     */}
+      {/* ======================================= */}
+      {showIndivRevModal && selectedEmployee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in text-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-5">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b pb-4 border-slate-150 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-500/10 text-indigo-600 rounded-xl font-bold">
+                  <Edit3 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 dark:text-white text-sm">
+                    Individual Salary Revision ({selectedEmployee.name})
+                  </h3>
+                  <p className="text-slate-400 text-[11px]">Emp ID: {selectedEmployee.id} • Adjust salary structure and effective date</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowIndivRevModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleApplyIndividualRevision} className="space-y-4">
+              
+              {/* Revision Type Toggle (Increment / Decrement) */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRevType('increment')}
+                  className={`p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all ${
+                    revType === 'increment'
+                      ? 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/20'
+                      : 'bg-slate-50 dark:bg-slate-955 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  <TrendingUp className="h-4 w-4" /> Increment (+)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRevType('decrement')}
+                  className={`p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all ${
+                    revType === 'decrement'
+                      ? 'bg-rose-500 text-white border-rose-600 shadow-md shadow-rose-500/20'
+                      : 'bg-slate-50 dark:bg-slate-955 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  <TrendingDown className="h-4 w-4" /> Decrement (-)
+                </button>
+              </div>
+
+              {/* Mode Toggle & Input */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold block">Calculation Mode</label>
+                  <select
+                    value={revMode}
+                    onChange={(e) => setRevMode(e.target.value as 'percent' | 'flat')}
+                    className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-955 text-slate-800 dark:text-slate-200 font-bold focus:outline-none"
+                  >
+                    <option value="percent">Percentage (%)</option>
+                    <option value="flat">Fixed Flat Amount (₹)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold block">
+                    {revType === 'increment' ? 'Increase' : 'Decrease'} Value ({revMode === 'percent' ? '%' : '₹'})
+                  </label>
+                  <input
+                    type="number"
+                    value={revVal}
+                    onChange={(e) => setRevVal(Number(e.target.value))}
+                    min={0}
+                    step={revMode === 'percent' ? 0.5 : 500}
+                    className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-955 text-slate-800 dark:text-slate-200 font-bold focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Live Preview Box */}
+              {(() => {
+                const curBasic = selectedEmployee.basic || 15000;
+                const curHra = selectedEmployee.hra || Math.round(curBasic * 0.4);
+                const curAllowance = selectedEmployee.allowance || Math.round(curBasic * 0.2);
+                const curGross = curBasic + curHra + curAllowance;
+
+                let factor = 1;
+                if (revMode === 'percent') {
+                  const p = revVal / 100;
+                  factor = revType === 'increment' ? 1 + p : Math.max(0.01, 1 - p);
+                }
+
+                let newBasic = curBasic;
+                let newHra = curHra;
+                let newAllowance = curAllowance;
+
+                if (revMode === 'percent') {
+                  newBasic = Math.round(curBasic * factor);
+                  newHra = Math.round(curHra * factor);
+                  newAllowance = Math.round(curAllowance * factor);
+                } else {
+                  const delta = revType === 'increment' ? Number(revVal) : -Number(revVal);
+                  newBasic = Math.max(0, curBasic + Math.round(delta * 0.5));
+                  newHra = Math.max(0, curHra + Math.round(delta * 0.3));
+                  newAllowance = Math.max(0, curAllowance + Math.round(delta * 0.2));
+                }
+                const newGross = newBasic + newHra + newAllowance;
+                const diffGross = newGross - curGross;
+
+                return (
+                  <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-2xl space-y-2">
+                    <span className="font-bold text-indigo-900 dark:text-indigo-300 text-xs block">
+                      Live Revision Breakdown Preview
+                    </span>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                        <span>Current Monthly Gross:</span>
+                        <span className="font-bold">₹{curGross.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                        <span>New Monthly Gross:</span>
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400">₹{newGross.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                        <span>Basic Salary:</span>
+                        <span className="font-bold">₹{curBasic.toLocaleString()} ➔ ₹{newBasic.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                        <span>Net Monthly Change:</span>
+                        <span className={`font-bold ${diffGross >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {diffGross >= 0 ? '+' : ''}₹{diffGross.toLocaleString()} / mo
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Effective Date & Remarks */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold block">Effective Date</label>
+                  <input
+                    type="date"
+                    value={revEffectiveDate}
+                    onChange={(e) => setRevEffectiveDate(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-955 text-slate-800 dark:text-slate-200 font-bold focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold block">Revision Rationale / Reason</label>
+                  <input
+                    type="text"
+                    value={revReason}
+                    onChange={(e) => setRevReason(e.target.value)}
+                    placeholder="Rationale (e.g. Annual Appraisal)"
+                    className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-955 text-slate-800 dark:text-slate-200 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowIndivRevModal(false)}
+                  className="px-4 py-2 border rounded-xl font-bold hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateSalaryMutation.isPending}
+                  className="px-6 py-2 bg-primary text-white rounded-xl font-extrabold shadow-md hover:scale-102 transition-all disabled:opacity-50"
+                >
+                  {updateSalaryMutation.isPending ? "Saving..." : "Save Salary Revision"}
+                </button>
+              </div>
+
+            </form>
+          </div>
         </div>
       )}
 

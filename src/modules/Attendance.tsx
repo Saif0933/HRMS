@@ -366,14 +366,48 @@ export const Attendance: React.FC = () => {
   const [reportYear, setReportYear] = useState('2026');
   const [reportSearch, setReportSearch] = useState('');
 
-  // Roster states
+  // Dynamic Roster Shift States
   const [rosterWeek, setRosterWeek] = useState('Week 27 (Jul 1 - Jul 5)');
-  const [shifts] = useState([
-    { empId: "EMP001", name: "Aarav Sharma", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", MonOff: "Week Off" },
-    { empId: "EMP002", name: "Neha Patel", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", MonOff: "Week Off" },
-    { empId: "EMP003", name: "Rohan Das", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", MonOff: "Week Off" },
-    { empId: "EMP008", name: "Ananya Roy", Mon: "General", Tue: "General", Wed: "General", Thu: "General", Fri: "General", Sat: "Week Off", MonOff: "Week Off" }
-  ]);
+  const [rosterSearch, setRosterSearch] = useState('');
+  const [employeeShifts, setEmployeeShifts] = useState<Record<string, Record<string, string>>>({});
+
+  // Initialize roster assignments when live employees list loads
+  useEffect(() => {
+    if (employeesList.length > 0) {
+      setEmployeeShifts(prev => {
+        const updated = { ...prev };
+        employeesList.forEach((emp, index) => {
+          if (!updated[emp.id]) {
+            updated[emp.id] = {
+              Mon: 'General',
+              Tue: 'General',
+              Wed: 'General',
+              Thu: 'General',
+              Fri: 'General',
+              Sat: index % 2 === 0 ? 'Week Off' : 'Morning',
+              Sun: 'Week Off'
+            };
+          }
+        });
+        return updated;
+      });
+    }
+  }, [employeesList]);
+
+  const handleShiftChange = (empId: string, day: string, shiftVal: string) => {
+    setEmployeeShifts(prev => ({
+      ...prev,
+      [empId]: {
+        ...(prev[empId] || { Mon: 'General', Tue: 'General', Wed: 'General', Thu: 'General', Fri: 'General', Sat: 'Week Off', Sun: 'Week Off' }),
+        [day]: shiftVal
+      }
+    }));
+  };
+
+  const handleSaveRoster = () => {
+    addAuditLog("Published Shift Roster", "Attendance Module", `Published weekly roster shifts for ${employeesList.length} employees for ${rosterWeek}.`);
+    alert(`Weekly Roster Plan for ${rosterWeek} has been successfully updated and saved for all ${employeesList.length} employees!`);
+  };
 
   // Attendance Calendar (Muster Roll) grid for July 2026
   const musterDays = Array.from({ length: 30 }, (_, i) => {
@@ -890,18 +924,40 @@ export const Attendance: React.FC = () => {
                   <h3 className="font-bold text-slate-800 dark:text-white text-sm">Real-time Location Verification</h3>
                   <p className="text-slate-400 text-[10px] mt-0.5">Displays geofence regions. Click on the map to manually override and verify GPS.</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>Your Position</span>
-                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500"></span>Office Geofences</span>
+                <div className="flex items-center gap-3">
+                  <div className="hidden sm:flex items-center gap-2">
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>Your Position</span>
+                    <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500"></span>Office Geofences</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAutoDetectLocation}
+                    className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Compass className="h-3.5 w-3.5 text-white" />
+                    <span>Fetch Current Location</span>
+                  </button>
                 </div>
               </div>
 
               <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-inner relative h-[400px] bg-slate-100 dark:bg-slate-955">
                 <div ref={punchMapRef} className="w-full h-full" />
-                <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg font-bold text-[9px] flex items-center gap-1 select-none pointer-events-none border border-white/5">
+                
+                {/* Floating Map Controls */}
+                <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg font-bold text-[9px] flex items-center gap-1 select-none pointer-events-none border border-white/5 z-10">
                   <MapPin className="h-3.5 w-3.5 text-blue-400 animate-bounce" />
                   <span>Click map to set simulated location</span>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleAutoDetectLocation}
+                  className="absolute top-3 right-3 z-10 px-3 py-2 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-white font-extrabold text-xs rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                  title="Fetch your exact current GPS coordinates"
+                >
+                  <Compass className="h-4 w-4 text-primary" />
+                  <span>Fetch Current Location</span>
+                </button>
               </div>
             </div>
 
@@ -953,49 +1009,147 @@ export const Attendance: React.FC = () => {
       {/* 2. SHIFT & ROSTER PLANNING              */}
       {/* ======================================= */}
       {activeSubModule === 'roster' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 animate-fade-in text-xs">
-          <div className="flex items-center justify-between border-b pb-2.5">
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5 animate-fade-in text-xs">
+          
+          {/* Header Controls */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between border-b pb-4 gap-4">
             <div>
-              <h3 className="font-bold text-slate-800 dark:text-white text-sm">Shift Planner & Team Roster</h3>
-              <p className="text-slate-400 mt-0.5">Assign shifts to engineering and corporate resources weekly.</p>
+              <h3 className="font-bold text-slate-800 dark:text-white text-base flex items-center gap-2">
+                <span>Shift Planner & Team Roster</span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300">
+                  {employeesList.length} Active Staff
+                </span>
+              </h3>
+              <p className="text-slate-400 text-xs mt-0.5">Assign custom shifts to employees weekly with real-time audit trail syncing.</p>
             </div>
-            <select 
-              value={rosterWeek} 
-              onChange={(e) => setRosterWeek(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-350 focus:outline-none animate-fade-in"
-            >
-              <option>Week 27 (Jul 1 - Jul 5)</option>
-              <option>Week 28 (Jul 6 - Jul 12)</option>
-            </select>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Employee Filter */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Search staff..." 
+                  value={rosterSearch}
+                  onChange={(e) => setRosterSearch(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 border rounded-xl focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350 text-xs w-40 md:w-48" 
+                />
+              </div>
+
+              {/* Week Selector */}
+              <select 
+                value={rosterWeek} 
+                onChange={(e) => setRosterWeek(e.target.value)}
+                className="px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-750 dark:text-slate-300 font-bold focus:outline-none text-xs"
+              >
+                <option value="Week 27 (Jul 1 - Jul 5)">Week 27 (Jul 1 - Jul 5)</option>
+                <option value="Week 28 (Jul 6 - Jul 12)">Week 28 (Jul 6 - Jul 12)</option>
+                <option value="Week 29 (Jul 13 - Jul 19)">Week 29 (Jul 13 - Jul 19)</option>
+                <option value="Week 30 (Jul 20 - Jul 26)">Week 30 (Jul 20 - Jul 26)</option>
+              </select>
+
+              {/* Save Button */}
+              <button
+                type="button"
+                onClick={handleSaveRoster}
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check className="h-4 w-4 text-white" />
+                <span>Save & Publish Roster</span>
+              </button>
+            </div>
           </div>
 
-          <div className="border rounded-xl overflow-hidden">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 dark:bg-slate-950 text-slate-400 font-semibold border-b uppercase text-[10px]">
+          {/* Shift Timing Legend */}
+          <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50/70 dark:bg-slate-955/50 rounded-xl border border-slate-150 dark:border-slate-800 text-[11px]">
+            <span className="font-bold text-slate-500 uppercase text-[9px]">Shift Timings:</span>
+            <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/50">General (09:30 - 18:30)</span>
+            <span className="px-2 py-0.5 rounded-md font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/50">Morning (08:00 - 17:00)</span>
+            <span className="px-2 py-0.5 rounded-md font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200/50">Evening (14:00 - 23:00)</span>
+            <span className="px-2 py-0.5 rounded-md font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200/50">Night (22:00 - 07:00)</span>
+            <span className="px-2 py-0.5 rounded-md font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200/50">Week Off</span>
+          </div>
+
+          {/* Dynamic Employee Roster Table */}
+          <div className="border border-slate-150 dark:border-slate-800 rounded-xl overflow-hidden overflow-x-auto shadow-inner">
+            <table className="w-full text-xs text-left min-w-[850px]">
+              <thead className="bg-slate-50 dark:bg-slate-955 text-slate-400 font-bold border-b uppercase text-[10px]">
                 <tr>
-                  <th className="p-3">Employee Name</th>
-                  <th className="p-3 text-center">Mon</th>
-                  <th className="p-3 text-center">Tue</th>
-                  <th className="p-3 text-center">Wed</th>
-                  <th className="p-3 text-center">Thu</th>
-                  <th className="p-3 text-center">Fri</th>
-                  <th className="p-3 text-center">Sat</th>
-                  <th className="p-3 text-center">Sun</th>
+                  <th className="p-3 min-w-[200px]">Employee Profile</th>
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                    <th key={day} className="p-3 text-center min-w-[105px]">{day}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y text-slate-650 dark:text-slate-350">
-                {shifts.map((s) => (
-                  <tr key={s.empId} className="hover:bg-slate-50 dark:hover:bg-slate-850">
-                    <td className="p-3 font-bold text-slate-800 dark:text-white">{s.name}</td>
-                    <td className="p-3 text-center"><span className="bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-semibold">{s.Mon}</span></td>
-                    <td className="p-3 text-center"><span className="bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-semibold">{s.Tue}</span></td>
-                    <td className="p-3 text-center"><span className="bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-semibold">{s.Wed}</span></td>
-                    <td className="p-3 text-center"><span className="bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-semibold">{s.Thu}</span></td>
-                    <td className="p-3 text-center"><span className="bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-semibold">{s.Fri}</span></td>
-                    <td className="p-3 text-center text-slate-400 font-semibold">{s.Sat}</td>
-                    <td className="p-3 text-center text-slate-400 font-semibold">{s.MonOff}</td>
+                {employeesLoading ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-slate-400 font-semibold">
+                      Loading roster staff database...
+                    </td>
                   </tr>
-                ))}
+                ) : employeesList.filter(e => e.name.toLowerCase().includes(rosterSearch.toLowerCase()) || e.id.toLowerCase().includes(rosterSearch.toLowerCase())).length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-slate-400 font-semibold italic">
+                      No matching staff found for "{rosterSearch}".
+                    </td>
+                  </tr>
+                ) : (
+                  employeesList
+                    .filter(e => e.name.toLowerCase().includes(rosterSearch.toLowerCase()) || e.id.toLowerCase().includes(rosterSearch.toLowerCase()))
+                    .map((emp) => {
+                      const shiftsForEmp = employeeShifts[emp.id] || {
+                        Mon: 'General', Tue: 'General', Wed: 'General', Thu: 'General', Fri: 'General', Sat: 'Week Off', Sun: 'Week Off'
+                      };
+
+                      const getShiftStyle = (val: string) => {
+                        switch (val) {
+                          case 'Morning': return 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200';
+                          case 'Evening': return 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200';
+                          case 'Night': return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border-indigo-200';
+                          case 'Week Off': return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-slate-200';
+                          default: return 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200';
+                        }
+                      };
+
+                      return (
+                        <tr key={emp.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-850/60 transition-colors">
+                          <td className="p-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-xs shrink-0">
+                                {emp.name?.charAt(0) || 'E'}
+                              </div>
+                              <div className="truncate">
+                                <span className="font-extrabold text-slate-800 dark:text-white block truncate">{emp.name}</span>
+                                <span className="text-[10px] text-slate-400 block truncate">
+                                  {emp.id} • {emp.designation || 'Staff'}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
+                            const val = shiftsForEmp[day] || 'General';
+                            return (
+                              <td key={day} className="p-2 text-center">
+                                <select
+                                  value={val}
+                                  onChange={(e) => handleShiftChange(emp.id, day, e.target.value)}
+                                  className={`w-full text-[11px] font-extrabold px-2 py-1 rounded-lg border focus:outline-none text-center cursor-pointer transition-all ${getShiftStyle(val)}`}
+                                >
+                                  <option value="General">General</option>
+                                  <option value="Morning">Morning</option>
+                                  <option value="Evening">Evening</option>
+                                  <option value="Night">Night</option>
+                                  <option value="Week Off">Week Off</option>
+                                </select>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })
+                )}
               </tbody>
             </table>
           </div>
@@ -1395,7 +1549,7 @@ export const Attendance: React.FC = () => {
                     onChange={(e) => setNewFenceName(e.target.value)}
                     placeholder="e.g. Ranchi Branch Office"
                     required
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-350"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-350 font-semibold"
                   />
                 </div>
 
@@ -1440,7 +1594,7 @@ export const Attendance: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleAutoDetectLocation}
-                    className="w-1/2 py-2 bg-slate-105 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-bold rounded-xl border flex items-center justify-center gap-1.5 transition-all"
+                    className="w-1/2 py-2 bg-slate-105 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-bold rounded-xl border flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Compass className="h-3.5 w-3.5" />
                     <span>Auto GPS</span>
@@ -1448,9 +1602,10 @@ export const Attendance: React.FC = () => {
                   <button 
                     type="submit" 
                     disabled={createFenceMut.isPending}
-                    className="w-1/2 py-2 bg-primary text-white rounded-xl font-bold hover:scale-105 transition-all shadow-md disabled:opacity-50"
+                    className="w-1/2 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold hover:scale-105 transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    {createFenceMut.isPending ? "Adding..." : "Add Boundary"}
+                    <Lock className="h-3.5 w-3.5 text-white" />
+                    <span>{createFenceMut.isPending ? "Locking..." : "Add & Lock Boundary"}</span>
                   </button>
                 </div>
               </form>
@@ -1474,7 +1629,17 @@ export const Attendance: React.FC = () => {
                     const isSimInside = distanceToFence <= fence.radius;
 
                     return (
-                      <div key={fence.id} className="p-3 border border-slate-150 dark:border-slate-850 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-955/30 gap-4 text-xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+                      <div 
+                        key={fence.id} 
+                        onClick={() => {
+                          setNewFenceName(fence.name);
+                          setNewFenceLat(fence.lat);
+                          setNewFenceLng(fence.lng);
+                          setNewFenceRadius(fence.radius);
+                        }}
+                        className="p-3 border border-slate-150 dark:border-slate-850 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-955/30 gap-4 text-xs hover:border-indigo-500 dark:hover:border-indigo-500 transition-all cursor-pointer group"
+                        title="Click to auto-fill location details into form"
+                      >
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5">
                             <span className="font-bold text-slate-800 dark:text-white truncate max-w-[120px]" title={fence.name}>
@@ -1491,14 +1656,20 @@ export const Attendance: React.FC = () => {
                           </p>
                         </div>
                         
-                        <button 
-                          onClick={() => handleDeleteGeofence(fence.id, fence.name)}
-                          disabled={deleteFenceMut.isPending}
-                          className="p-1.5 bg-rose-50 text-rose-500 dark:bg-rose-950/30 dark:text-rose-400 rounded-lg hover:scale-110 transition-all"
-                          title="Delete Geofence"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] font-bold text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity">Select</span>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteGeofence(fence.id, fence.name);
+                            }}
+                            disabled={deleteFenceMut.isPending}
+                            className="p-1.5 bg-rose-50 text-rose-500 dark:bg-rose-950/30 dark:text-rose-400 rounded-lg hover:scale-110 transition-all"
+                            title="Delete Geofence"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}

@@ -68,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileO
       icon: Wallet,
       subItems: [
         { id: 'process', label: 'Salary Processing' },
+        { id: 'revisions', label: 'Salary Structure & Revisions' },
         { id: 'loans', label: 'Loans & Advances' },
         { id: 'investment', label: 'Investment Declarations' },
         { id: 'payslips', label: 'Payslip Templates' },
