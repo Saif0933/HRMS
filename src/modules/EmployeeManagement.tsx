@@ -970,7 +970,11 @@ export const EmployeeManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState('All');  
   const [statusFilter, setStatusFilter] = useState('All');
-  const [profileTab, setProfileTab] = useState<'overview' | 'documents' | 'attendance' | 'payroll' | 'leave' | 'performance' | 'assets' | 'revision' | 'timeline' | 'notes'>('overview');
+  const [profileTab, setProfileTab] = useState<'overview' | 'documents' | 'attendance' | 'payroll' | 'leave' | 'performance' | 'assets' | 'family' | 'revision' | 'timeline' | 'notes'>('overview');
+
+  // Dynamic Muster Roll Calendar Month & Year State
+  const [musterMonth, setMusterMonth] = useState('July');
+  const [musterYear, setMusterYear] = useState('2026');
 
   // Dynamic Family & Dependent Management State
   const [familyMembersMap, setFamilyMembersMap] = useState<Record<string, Array<{
@@ -991,6 +995,63 @@ export const EmployeeManagement: React.FC = () => {
       { id: 'FAM-103', name: 'Ramesh Sen', relation: 'Father', dob: '1965-08-20', contact: '+91 98222 33344', bloodGroup: 'A+', isNominee: true, isInsuranceCovered: true }
     ]
   });
+  // Dynamic Family Member Modal & Handlers
+  const [showAddFamilyModal, setShowAddFamilyModal] = useState(false);
+  const [famName, setFamName] = useState('');
+  const [famRelation, setFamRelation] = useState('Spouse');
+  const [famDob, setFamDob] = useState('');
+  const [famContact, setFamContact] = useState('');
+  const [famBloodGroup, setFamBloodGroup] = useState('O+');
+  const [famIsNominee, setFamIsNominee] = useState(true);
+  const [famIsInsurance, setFamIsInsurance] = useState(true);
+
+  const handleAddFamilyMemberSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!famName || !activeEmployee?.id) return;
+    
+    addFamilyMutation.mutate({
+      employeeId: activeEmployee.id,
+      data: {
+        name: famName,
+        relation: famRelation,
+        dob: famDob || null,
+        contact: famContact || null,
+        bloodGroup: famBloodGroup || null,
+        isNominee: famIsNominee,
+        isInsuranceCovered: famIsInsurance
+      }
+    }, {
+      onSuccess: () => {
+        addAuditLog("Added Family Member", "Employee Center", `Added dependent "${famName}" (${famRelation}) for employee ${activeEmployee.name}`);
+        setFamName('');
+        setFamContact('');
+        setFamDob('');
+        setShowAddFamilyModal(false);
+        alert("Family member added successfully!");
+      },
+      onError: (err) => {
+        alert("Failed to add family member: " + err.message);
+      }
+    });
+  };
+
+  const handleDeleteFamilyMember = (memberId: string, memberName: string) => {
+    if (!activeEmployee?.id) return;
+    if (confirm(`Are you sure you want to remove dependent "${memberName}"?`)) {
+      deleteFamilyMutation.mutate({
+        employeeId: activeEmployee.id,
+        familyId: memberId
+      }, {
+        onSuccess: () => {
+          addAuditLog("Removed Family Member", "Employee Center", `Removed dependent "${memberName}" for employee ${activeEmployee.name}`);
+          alert("Family member removed successfully!");
+        },
+        onError: (err) => {
+          alert("Failed to delete family member: " + err.message);
+        }
+      });
+    }
+  };
 
 
 
@@ -1745,7 +1806,7 @@ export const EmployeeManagement: React.FC = () => {
 
           {/* Profile Tab selectors */}
           <div className="flex border-b border-slate-100 dark:border-slate-800 overflow-x-auto gap-2">
-            {(['overview', 'documents', 'attendance', 'payroll', 'leave', 'performance', 'assets', 'revision', 'timeline', 'notes'] as const).map((tab) => (
+            {(['overview', 'documents', 'attendance', 'payroll', 'leave', 'performance', 'assets', 'family', 'revision', 'timeline', 'notes'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setProfileTab(tab)}
@@ -1755,7 +1816,7 @@ export const EmployeeManagement: React.FC = () => {
                     : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
               >
-                {tab === 'revision' ? 'Revision History' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'family' ? 'Family & Dependents' : tab === 'revision' ? 'Revision History' : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
@@ -2018,8 +2079,13 @@ export const EmployeeManagement: React.FC = () => {
             )}
 
             {profileTab === 'attendance' && (
-              <div className="space-y-4 text-xs">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-white border-b pb-2">Attendance Summary (Current Cycle)</h3>
+              <div className="space-y-6 text-xs">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white">Attendance Summary & Muster Roll Calendar</h3>
+                  <span className="text-[10px] text-slate-400 font-medium">Monthly Cycle: July 2026</span>
+                </div>
+
+                {/* Metric Summary Cards */}
                 <div className="grid grid-cols-4 gap-4">
                   <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl text-center border">
                     <p className="text-[10px] text-slate-400 uppercase font-bold">Total Days</p>
@@ -2038,15 +2104,144 @@ export const EmployeeManagement: React.FC = () => {
                     <p className="text-xl font-bold mt-1 text-red-700 dark:text-red-400">0</p>
                   </div>
                 </div>
-                
-                <div className="mt-4">
-                  <h4 className="font-bold text-slate-800 dark:text-white mb-2">Shift Schedule</h4>
+
+                {/* Shift Schedule Banner */}
+                <div>
+                  <h4 className="font-bold text-slate-800 dark:text-white mb-2">Assigned Shift Schedule</h4>
                   <div className="p-3 border rounded-xl bg-slate-50 dark:bg-slate-950 flex items-center justify-between">
                     <div>
                       <p className="font-bold text-slate-800 dark:text-white">General Day Shift (G-01)</p>
                       <p className="text-[10px] text-slate-400">09:30 AM to 06:30 PM • 9 Hours (1 Hr break included)</p>
                     </div>
-                    <span className="bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full font-bold">ROSTERED</span>
+                    <span className="bg-slate-200 dark:bg-slate-800 px-2.5 py-1 rounded-full font-bold text-[10px] text-slate-700 dark:text-slate-300">ROSTERED</span>
+                  </div>
+                </div>
+
+                {/* Muster Roll Calendar Grid */}
+                <div className="border rounded-2xl p-5 bg-slate-50/50 dark:bg-slate-950/40 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-3 gap-3">
+                    <div>
+                      <h4 className="font-bold text-slate-800 dark:text-white text-xs">
+                        Muster Roll Calendar - {musterMonth} {musterYear}
+                      </h4>
+                      <p className="text-[10px] text-slate-400">Daily attendance logs for {activeEmployee.name}</p>
+                    </div>
+
+                    {/* Month & Year Selectors */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <select 
+                        value={musterMonth}
+                        onChange={(e) => setMusterMonth(e.target.value)}
+                        className="px-3 py-1.5 border rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold focus:outline-none focus:ring-1 focus:ring-primary text-xs cursor-pointer shadow-2xs"
+                      >
+                        {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+
+                      <select 
+                        value={musterYear}
+                        onChange={(e) => setMusterYear(e.target.value)}
+                        className="px-3 py-1.5 border rounded-xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold focus:outline-none focus:ring-1 focus:ring-primary text-xs cursor-pointer shadow-2xs"
+                      >
+                        {['2024', '2025', '2026', '2027', '2028'].map(y => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+
+                      <button 
+                        onClick={() => alert(`Downloading Muster Roll report for ${activeEmployee.name} (${musterMonth} ${musterYear})...`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl font-semibold hover:scale-105 transition-all text-xs shadow-xs"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        Download Report
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Calendar Grid Logic */}
+                  {(() => {
+                    const monthsList = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                    const monthIdx = monthsList.indexOf(musterMonth);
+                    const yearNum = parseInt(musterYear, 10);
+                    
+                    // Days in month calculation
+                    const totalDays = new Date(yearNum, monthIdx + 1, 0).getDate();
+                    
+                    // First day of the month (0 = Sun, 1 = Mon...)
+                    const firstDay = new Date(yearNum, monthIdx, 1).getDay();
+                    // Offset for Monday-start grid (Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6)
+                    const offsetCount = (firstDay + 6) % 7;
+
+                    return (
+                      <div className="grid grid-cols-7 gap-2">
+                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(w => (
+                          <div key={w} className="text-center font-bold text-slate-400 py-1 text-[11px]">{w}</div>
+                        ))}
+                        
+                        {/* Render blank offset spaces */}
+                        {Array.from({ length: offsetCount }).map((_, idx) => (
+                          <div key={`offset-${idx}`} className="py-2 border border-transparent"></div>
+                        ))}
+
+                        {/* Render Days */}
+                        {Array.from({ length: totalDays }, (_, i) => {
+                          const dayNum = i + 1;
+                          const currentDayOfWeek = new Date(yearNum, monthIdx, dayNum).getDay();
+                          
+                          let status: 'Present' | 'Late' | 'Absent' | 'Holiday' | 'WeekOff' = 'Present';
+                          
+                          if (currentDayOfWeek === 0 || currentDayOfWeek === 6) {
+                            status = 'WeekOff';
+                          } else if (dayNum === 10) {
+                            status = 'Absent';
+                          } else if (dayNum === 14 || dayNum === 22) {
+                            status = 'Late';
+                          } else if (dayNum === 15) {
+                            status = 'Holiday';
+                          }
+
+                          return (
+                            <div 
+                              key={dayNum} 
+                              className={`border rounded-xl p-2 text-center flex flex-col justify-between h-14 cursor-pointer hover:border-primary transition-all shadow-2xs ${
+                                status === 'Present' ? 'bg-green-50/70 dark:bg-green-950/20 border-green-200 dark:border-green-900/40' :
+                                status === 'Late' ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40' :
+                                status === 'Absent' ? 'bg-red-50/70 dark:bg-red-950/20 border-red-200 dark:border-red-900/40 animate-pulse' :
+                                status === 'Holiday' ? 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/40' :
+                                'bg-slate-100/60 dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+                              }`}
+                              onClick={() => {
+                                alert(`Date: ${musterMonth} ${dayNum}, ${musterYear}\nEmployee: ${activeEmployee.name}\nStatus: ${status}`);
+                              }}
+                            >
+                              <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">{dayNum}</span>
+                              <span className={`text-[8px] font-extrabold block uppercase tracking-wider ${
+                                status === 'Present' ? 'text-green-600 dark:text-green-400' :
+                                status === 'Late' ? 'text-amber-600 dark:text-amber-400' :
+                                status === 'Absent' ? 'text-red-600 dark:text-red-400' :
+                                status === 'Holiday' ? 'text-blue-600 dark:text-blue-400' :
+                                'text-slate-400'
+                              }`}>
+                                {status === 'Present' ? 'PRESENT' :
+                                 status === 'Late' ? 'LATE' :
+                                 status === 'Absent' ? 'ABSENT' :
+                                 status === 'Holiday' ? 'HOLIDAY' : 'WEEK OFF'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                  
+                  {/* Legend Footer */}
+                  <div className="flex gap-4 items-center mt-3 pt-3 border-t justify-center text-[10px] font-medium text-slate-500 dark:text-slate-400 flex-wrap">
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-green-500"></span>Present</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500"></span>Late</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500"></span>Absent</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-500"></span>Holiday</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-slate-400"></span>Week Off</span>
                   </div>
                 </div>
               </div>
@@ -2475,6 +2670,217 @@ export const EmployeeManagement: React.FC = () => {
             )}
 
 
+
+            {profileTab === 'family' && (
+              <div className="space-y-4 text-xs">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-white">Family Members & Dependent Details</h3>
+                    <p className="text-[10px] text-slate-400">Registered dependents, nominees and insurance covered family members for {activeEmployee.name}</p>
+                  </div>
+                  <button 
+                    onClick={() => setShowAddFamilyModal(true)}
+                    className="px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-semibold hover:scale-105 transition-all shadow-sm flex items-center gap-1"
+                  >
+                    <span>+ Add Dependent</span>
+                  </button>
+                </div>
+
+                {/* Add Family Member Modal Overlay */}
+                {showAddFamilyModal && (
+                  <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-5 w-full max-w-md space-y-4 shadow-xl animate-fade-in text-xs">
+                      <div className="flex items-center justify-between border-b pb-2">
+                        <h4 className="font-bold text-sm text-slate-800 dark:text-white">Add Family Member / Dependent</h4>
+                        <button 
+                          onClick={() => setShowAddFamilyModal(false)}
+                          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleAddFamilyMemberSubmit} className="space-y-3">
+                        <div className="space-y-1">
+                          <label className="text-slate-500 font-medium">Full Name</label>
+                          <input 
+                            type="text" 
+                            required
+                            value={famName}
+                            onChange={(e) => setFamName(e.target.value)}
+                            placeholder="Enter dependent full name"
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-slate-500 font-medium">Relationship</label>
+                            <select 
+                              value={famRelation}
+                              onChange={(e) => setFamRelation(e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                            >
+                              <option value="Spouse">Spouse (Wife/Husband)</option>
+                              <option value="Son">Son</option>
+                              <option value="Daughter">Daughter</option>
+                              <option value="Father">Father</option>
+                              <option value="Mother">Mother</option>
+                              <option value="Brother">Brother</option>
+                              <option value="Sister">Sister</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-slate-500 font-medium">Date of Birth</label>
+                            <input 
+                              type="date" 
+                              value={famDob}
+                              onChange={(e) => setFamDob(e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-slate-500 font-medium">Emergency Contact</label>
+                            <input 
+                              type="tel" 
+                              value={famContact}
+                              onChange={(e) => setFamContact(e.target.value)}
+                              placeholder="+91 98000 00000"
+                              className="w-full p-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-slate-500 font-medium">Blood Group</label>
+                            <select 
+                              value={famBloodGroup}
+                              onChange={(e) => setFamBloodGroup(e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                            >
+                              <option value="A+">A+</option>
+                              <option value="A-">A-</option>
+                              <option value="B+">B+</option>
+                              <option value="B-">B-</option>
+                              <option value="O+">O+</option>
+                              <option value="O-">O-</option>
+                              <option value="AB+">AB+</option>
+                              <option value="AB-">AB-</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4 pt-1">
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={famIsNominee}
+                              onChange={(e) => setFamIsNominee(e.target.checked)}
+                              className="rounded accent-primary"
+                            />
+                            <span className="text-slate-600 dark:text-slate-300">Primary Nominee</span>
+                          </label>
+
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={famIsInsurance}
+                              onChange={(e) => setFamIsInsurance(e.target.checked)}
+                              className="rounded accent-primary"
+                            />
+                            <span className="text-slate-600 dark:text-slate-300">Insurance Covered</span>
+                          </label>
+                        </div>
+
+                        <div className="flex justify-end gap-2 border-t pt-3">
+                          <button 
+                            type="button" 
+                            onClick={() => setShowAddFamilyModal(false)}
+                            className="px-3 py-1.5 border rounded-lg text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          >
+                            Cancel
+                          </button>
+                          <button 
+                            type="submit" 
+                            disabled={addFamilyMutation.isPending}
+                            className="px-3.5 py-1.5 bg-primary text-white rounded-lg font-semibold hover:scale-105 transition-all shadow-sm disabled:opacity-50"
+                          >
+                            {addFamilyMutation.isPending ? 'Saving...' : 'Save Dependent'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dynamic Family Members Grid fetched from API */}
+                {(() => {
+                  const dbFamilyList = (familyResponse?.data || []).map(f => ({
+                    id: f.id,
+                    name: f.name,
+                    relation: f.relation,
+                    dob: f.dob ? new Date(f.dob).toISOString().split('T')[0] : '',
+                    contact: f.contact || '',
+                    bloodGroup: f.bloodGroup || '',
+                    isNominee: f.isNominee,
+                    isInsuranceCovered: f.isInsuranceCovered
+                  }));
+
+                  const storedFamilyList = familyMembersMap[activeEmployee.id] || familyMembersMap[(activeEmployee as any).employeeId] || familyMembersMap[activeEmployee.name] || [];
+                  const activeEmpFamilyList = dbFamilyList.length > 0 ? dbFamilyList : storedFamilyList;
+
+                  return activeEmpFamilyList.length === 0 ? (
+                    <div className="p-8 text-center border rounded-xl bg-slate-50 dark:bg-slate-950 space-y-3">
+                      <p className="text-slate-400 font-medium">No family members or dependents registered yet for {activeEmployee.name}.</p>
+                      <button 
+                        onClick={() => setShowAddFamilyModal(true)}
+                        className="px-3.5 py-1.5 bg-primary text-white rounded-xl text-xs font-semibold hover:scale-105 transition-all shadow-sm inline-block"
+                      >
+                        + Add First Dependent
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {activeEmpFamilyList.map((fam) => (
+                        <div key={fam.id} className="p-4 border rounded-xl bg-slate-50 dark:bg-slate-950 space-y-2 relative group hover:border-primary/40 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-800 dark:text-white">{fam.relation} ({fam.name})</span>
+                            <div className="flex items-center gap-1.5">
+                              {fam.isNominee && (
+                                <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 px-2 py-0.5 rounded-full text-[9px] font-bold">
+                                  PRIMARY NOMINEE
+                                </span>
+                              )}
+                              {fam.isInsuranceCovered && (
+                                <span className="bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 px-2 py-0.5 rounded-full text-[9px] font-bold">
+                                  INSURANCE COVERED
+                                </span>
+                              )}
+                              <button 
+                                onClick={() => handleDeleteFamilyMember(fam.id, fam.name)}
+                                className="text-red-500 hover:text-red-700 p-1 opacity-70 group-hover:opacity-100 transition-opacity"
+                                title="Delete Dependent"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <p className="text-slate-600 dark:text-slate-300">Full Name: <span className="font-semibold">{fam.name}</span></p>
+                          <p className="text-slate-600 dark:text-slate-300">Relationship: <span className="font-semibold">{fam.relation}</span></p>
+                          {fam.dob && <p className="text-slate-600 dark:text-slate-300">Date of Birth: <span className="font-semibold">{fam.dob}</span></p>}
+                          {fam.contact && <p className="text-slate-600 dark:text-slate-300">Emergency Contact: <span className="font-semibold">{fam.contact}</span></p>}
+                          {fam.bloodGroup && <p className="text-slate-600 dark:text-slate-300">Blood Group: <span className="font-semibold">{fam.bloodGroup}</span></p>}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
             {profileTab === 'revision' && (
               <div className="space-y-4 text-xs">
