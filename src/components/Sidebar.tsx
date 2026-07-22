@@ -1,10 +1,24 @@
+import {
+  Award,
+  Briefcase,
+  CalendarDays,
+  ChevronDown, ChevronRight,
+  ClipboardList,
+  Clock,
+  FileText,
+  Heart,
+  HelpCircle,
+  Landmark,
+  Laptop,
+  LayoutDashboard,
+  MailOpen,
+  Plane,
+  Users,
+  Wallet,
+  X
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  LayoutDashboard, Users, Clock, CalendarDays, Wallet, Award, 
-  Heart, Plane, Briefcase, FileText, Laptop, MailOpen, 
-  HelpCircle, ChevronDown, ChevronRight, Landmark, ClipboardList, X
-} from 'lucide-react';
 
 interface MenuItem {
   id: string;
@@ -34,6 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileO
         { id: 'master', label: 'Employee Master' },
         { id: 'orgchart', label: 'Organization Chart' },
         { id: 'exit', label: 'Exit & Settlement' },
+        { id: 'resignation-archive', label: 'Resignation Archive' },
         { id: 'bulk', label: 'Bulk Imports & Exports' },
         { id: 'roles', label: 'Role & Permissions' },
         { id: 'departments', label: 'Departments' }
@@ -48,7 +63,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileO
         { id: 'roster', label: 'Shift & Roster' },
         { id: 'regularize', label: 'Regularization' },
         { id: 'muster', label: 'Muster Roll / Calendar' },
-        { id: 'reports', label: 'Attendance Reports' }
+        { id: 'reports', label: 'Attendance Reports' },
+        { id: 'geofence', label: 'Geofencing Config' }
       ]
     },
     { 
@@ -204,7 +220,104 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileO
 
         {/* Navigation List */}
         <nav className="flex-1 overflow-y-auto py-4 space-y-1.5 px-3">
-          {menuItems.map((item) => {
+          {(() => {
+            const { currentUser } = useApp();
+            const userPerms = currentUser?.permissions || [];
+            const isSuperAdmin = currentUser?.role === 'Super Admin';
+
+            const getSubItemPermission = (moduleId: string, subId: string): string => {
+              if (moduleId === 'employees') {
+                if (subId === 'directory') return 'VIEW_EMPLOYEE_DIRECTORY';
+                if (subId === 'master') return 'VIEW_EMPLOYEE_MASTER';
+                if (subId === 'orgchart') return 'VIEW_ORGANIZATION_CHART';
+                if (subId === 'exit') return 'VIEW_EXIT_SETTLEMENT';
+                if (subId === 'resignation-archive') return 'VIEW_EXIT_SETTLEMENT';
+                if (subId === 'bulk') return 'MANAGE_BULK_IMPORTS';
+                if (subId === 'roles') return 'VIEW_ROLES_PERMISSIONS';
+                if (subId === 'departments') return 'VIEW_DEPARTMENTS';
+              }
+              if (moduleId === 'attendance') {
+                if (subId === 'punch') return 'VIEW_GPS_SELFIE_PUNCH';
+                if (subId === 'roster') return 'VIEW_SHIFT_ROSTER';
+                if (subId === 'regularize') return 'VIEW_ATTENDANCE_REGULARIZATION';
+                if (subId === 'muster') return 'VIEW_MUSTER_ROLL';
+                if (subId === 'reports') return 'VIEW_ATTENDANCE_REPORTS';
+                if (subId === 'geofence') return 'UPDATE_SHIFT_ROSTER';
+              }
+              if (moduleId === 'leave') {
+                if (subId === 'apply') return 'CREATE_LEAVE_APPLICATION';
+                if (subId === 'approvals') return 'UPDATE_LEAVE_APPROVAL';
+                if (subId === 'calendar') return 'VIEW_LEAVE_CALENDAR';
+                if (subId === 'policies') return 'VIEW_LEAVE_POLICIES';
+              }
+              if (moduleId === 'payroll') {
+                if (subId === 'process') return 'UPDATE_SALARY_PROCESSING';
+                if (subId === 'revisions') return 'UPDATE_SALARY_STRUCTURE';
+                if (subId === 'loans') return 'VIEW_LOANS_ADVANCES';
+                if (subId === 'investment') return 'VIEW_INVESTMENT_DECLARATIONS';
+                if (subId === 'payslips') return 'VIEW_PAYSLIP_TEMPLATES';
+                if (subId === 'reports') return 'VIEW_PAYROLL_REPORTS';
+              }
+              if (moduleId === 'performance') {
+                if (subId === 'goals') return 'VIEW_KRA_GOALS';
+                if (subId === 'feedback') return 'VIEW_FEEDBACK_360';
+                if (subId === 'bellcurve') return 'VIEW_BELLCURVE_ANALYTICS';
+              }
+              if (moduleId === 'engagement') {
+                if (subId === 'feed') return 'VIEW_SOCIAL_FEED';
+                if (subId === 'mood') return 'VIEW_MOOD_ANALYSIS';
+                if (subId === 'surveys') return 'VIEW_SURVEYS';
+              }
+              if (moduleId === 'claims') {
+                if (subId === 'apply-claim') return 'CREATE_TRAVEL_REQUEST';
+                if (subId === 'my-claims') return 'VIEW_EXPENSE_REIMBURSEMENT';
+                if (subId === 'approvals') return 'UPDATE_CLAIM_APPROVAL';
+              }
+              if (moduleId === 'timesheets') {
+                if (subId === 'entry') return 'VIEW_TIMESHEET_ENTRY';
+                if (subId === 'projects') return 'VIEW_CLIENTS_PROJECTS';
+              }
+              if (moduleId === 'recruitment') {
+                if (subId === 'jobs') return 'VIEW_JOB_REQUISITIONS';
+                if (subId === 'candidates') return 'VIEW_CANDIDATE_PIPELINE';
+                if (subId === 'onboarding') return 'VIEW_PRE_ONBOARDING';
+              }
+              if (moduleId === 'documents') {
+                if (subId === 'vault') return 'VIEW_DOCUMENT_VAULT';
+              }
+              if (moduleId === 'assets') {
+                if (subId === 'register') return 'VIEW_ASSET_MANAGEMENT';
+              }
+              if (moduleId === 'letters') {
+                if (subId === 'generate') return 'VIEW_LETTER_GENERATOR';
+              }
+              if (moduleId === 'helpdesk') {
+                if (subId === 'tickets') return 'VIEW_HR_HELPDESK_TICKETS';
+              }
+              return `VIEW_${moduleId.toUpperCase()}`;
+            };
+
+            const visibleMenuItems = menuItems
+              .filter(item => {
+                if (item.id === 'dashboard') return true;
+                if (isSuperAdmin) return true;
+                const requiredPermission = `VIEW_${item.id.toUpperCase()}`;
+                return userPerms.includes(requiredPermission);
+              })
+              .map(item => {
+                if (!item.subItems) return item;
+                return {
+                  ...item,
+                  subItems: item.subItems.filter(sub => {
+                    if (isSuperAdmin) return true;
+                    const reqPerm = getSubItemPermission(item.id, sub.id);
+                    return userPerms.includes(reqPerm);
+                  })
+                };
+              })
+              .filter(item => item.id === 'dashboard' || !item.subItems || item.subItems.length > 0);
+
+            return visibleMenuItems.map((item) => {
             const Icon = item.icon;
             const isSelected = activeModule === item.id;
             const isDropdownOpen = openDropdown === item.id || (isSelected && openDropdown === null);
@@ -258,7 +371,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileO
                 )}
               </div>
             );
-          })}
+          });
+        })()}
         </nav>
 
         {/* Footer Info */}

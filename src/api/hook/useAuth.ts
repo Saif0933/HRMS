@@ -8,6 +8,7 @@ export interface User {
   email: string | null;
   phone: string;
   role?: string;
+  permissions?: string[];
 }
 
 export interface BaseResponse<T> {

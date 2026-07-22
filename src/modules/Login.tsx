@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRight, Landmark, Moon, Mail, Lock, RefreshCw, ShieldCheck, Sparkles, Sun, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, ArrowRight, Eye, EyeOff, Landmark, Lock, Mail, Moon, RefreshCw, Sparkles, Sun } from 'lucide-react';
 import React, { useState } from 'react';
 import { useLogin } from '../api/hook/useAuth';
 import { useApp } from '../context/AppContext';
@@ -90,24 +90,27 @@ export const Login: React.FC = () => {
             }
 
             // Find corresponding employee from mock lists/state, or create one:
-            const matchedEmployee = employees.find(emp => emp.email?.toLowerCase() === loggedUser.email?.toLowerCase()) || {
-              id: loggedUser.id,
-              name: loggedUser.name || 'New User',
-              email: loggedUser.email || '',
-              phone: loggedUser.phone || '',
+            const matchedEmployee = {
+              ...(employees.find(emp => emp.email?.toLowerCase() === loggedUser.email?.toLowerCase()) || {
+                id: loggedUser.id,
+                name: loggedUser.name || 'New User',
+                email: loggedUser.email || '',
+                phone: loggedUser.phone || '',
+                department: 'Engineering',
+                avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120',
+                status: 'Active' as const,
+                joiningDate: new Date().toISOString().split('T')[0],
+                location: 'Mumbai',
+                manager: 'Neha Patel',
+                basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
+                bankName: '', bankAccount: '', ifsc: '', pan: '', aadhaar: '', uan: '', pfNumber: '',
+                gender: 'Male', dob: '1995-01-01', bloodGroup: 'O+', maritalStatus: 'Single',
+                qualification: '', university: '', passingYear: '', pastCompanies: [],
+                promotions: [], transfers: [], assets: [],
+                probationDuration: '6 Months', probationEnd: '', confirmationStatus: 'Confirmed' as const
+              }),
               role: role,
-              department: 'Engineering',
-              avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120',
-              status: 'Active' as const,
-              joiningDate: new Date().toISOString().split('T')[0],
-              location: 'Mumbai',
-              manager: 'Neha Patel',
-              basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
-              bankName: '', bankAccount: '', ifsc: '', pan: '', aadhaar: '', uan: '', pfNumber: '',
-              gender: 'Male', dob: '1995-01-01', bloodGroup: 'O+', maritalStatus: 'Single',
-              qualification: '', university: '', passingYear: '', pastCompanies: [],
-              promotions: [], transfers: [], assets: [],
-              probationDuration: '6 Months', probationEnd: '', confirmationStatus: 'Confirmed' as const
+              permissions: loggedUser.permissions || [],
             };
 
             setCurrentUser(matchedEmployee as any);
@@ -147,24 +150,27 @@ export const Login: React.FC = () => {
               role = 'Manager';
             }
 
-            const matchedEmployee = employees.find(emp => emp.email?.toLowerCase() === loggedUser.email?.toLowerCase()) || {
-              id: loggedUser.id,
-              name: loggedUser.name || 'New User',
-              email: loggedUser.email || '',
-              phone: loggedUser.phone || '',
+            const matchedEmployee = {
+              ...(employees.find(emp => emp.email?.toLowerCase() === loggedUser.email?.toLowerCase()) || {
+                id: loggedUser.id,
+                name: loggedUser.name || 'New User',
+                email: loggedUser.email || '',
+                phone: loggedUser.phone || '',
+                department: 'Engineering',
+                avatar: user.avatar,
+                status: 'Active' as const,
+                joiningDate: new Date().toISOString().split('T')[0],
+                location: 'Mumbai',
+                manager: 'Neha Patel',
+                basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
+                bankName: '', bankAccount: '', ifsc: '', pan: '', aadhaar: '', uan: '', pfNumber: '',
+                gender: 'Male', dob: '1995-01-01', bloodGroup: 'O+', maritalStatus: 'Single',
+                qualification: '', university: '', passingYear: '', pastCompanies: [],
+                promotions: [], transfers: [], assets: [],
+                probationDuration: '6 Months', probationEnd: '', confirmationStatus: 'Confirmed' as const
+              }),
               role: role,
-              department: 'Engineering',
-              avatar: user.avatar,
-              status: 'Active' as const,
-              joiningDate: new Date().toISOString().split('T')[0],
-              location: 'Mumbai',
-              manager: 'Neha Patel',
-              basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
-              bankName: '', bankAccount: '', ifsc: '', pan: '', aadhaar: '', uan: '', pfNumber: '',
-              gender: 'Male', dob: '1995-01-01', bloodGroup: 'O+', maritalStatus: 'Single',
-              qualification: '', university: '', passingYear: '', pastCompanies: [],
-              promotions: [], transfers: [], assets: [],
-              probationDuration: '6 Months', probationEnd: '', confirmationStatus: 'Confirmed' as const
+              permissions: loggedUser.permissions || [],
             };
 
             setCurrentUser(matchedEmployee as any);

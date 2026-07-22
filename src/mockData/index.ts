@@ -11,6 +11,7 @@ export interface Employee {
   location: string;
   manager: string;
   userId?: string | null;
+  permissions?: string[];
   
   // Salary Details
   basic: number;

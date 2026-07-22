@@ -23,12 +23,16 @@ import { HelpDesk } from './modules/HelpDesk';
 import { Login } from './modules/Login';
 
 const MainLayout: React.FC = () => {
-  const { activeModule, theme, isAuthenticated } = useApp();
+  const { activeModule, theme, isAuthenticated, currentUser } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState<boolean>(false);
 
   if (!isAuthenticated) {
     return <Login />;
   }
+
+  const isSuperAdmin = currentUser?.role === 'Super Admin';
+  const userPerms = currentUser?.permissions || [];
+  const hasAccess = activeModule === 'dashboard' || isSuperAdmin || userPerms.includes(`VIEW_${activeModule.toUpperCase()}`);
 
   return (
     <div className={`flex h-screen overflow-hidden ${theme === 'dark' ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
@@ -36,20 +40,34 @@ const MainLayout: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden w-full min-w-0">
         <Navbar onToggleMobileMenu={() => setMobileMenuOpen(prev => !prev)} />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
-          {activeModule === 'dashboard' && <Dashboard />}
-          {activeModule === 'employees' && <EmployeeManagement />}
-          {activeModule === 'attendance' && <Attendance />}
-          {activeModule === 'leave' && <Leave />}
-          {activeModule === 'payroll' && <Payroll />}
-          {activeModule === 'performance' && <Performance />}
-          {activeModule === 'engagement' && <Engagement />}
-          {activeModule === 'claims' && <TravelClaims />}
-          {activeModule === 'timesheets' && <Timesheets />}
-          {activeModule === 'recruitment' && <Recruitment />}
-          {activeModule === 'documents' && <Documents />}
-          {activeModule === 'assets' && <Assets />}
-          {activeModule === 'letters' && <Letters />}
-          {activeModule === 'helpdesk' && <HelpDesk />}
+          {!hasAccess ? (
+            <div className="flex flex-col items-center justify-center h-full text-center p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 max-w-md mx-auto my-12 animate-fade-in">
+              <div className="bg-red-500/10 p-4 rounded-full text-red-500 mb-4">
+                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Access Denied</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">You do not have the required permissions to view the {activeModule.toUpperCase()} module.</p>
+            </div>
+          ) : (
+            <>
+              {activeModule === 'dashboard' && <Dashboard />}
+              {activeModule === 'employees' && <EmployeeManagement />}
+              {activeModule === 'attendance' && <Attendance />}
+              {activeModule === 'leave' && <Leave />}
+              {activeModule === 'payroll' && <Payroll />}
+              {activeModule === 'performance' && <Performance />}
+              {activeModule === 'engagement' && <Engagement />}
+              {activeModule === 'claims' && <TravelClaims />}
+              {activeModule === 'timesheets' && <Timesheets />}
+              {activeModule === 'recruitment' && <Recruitment />}
+              {activeModule === 'documents' && <Documents />}
+              {activeModule === 'assets' && <Assets />}
+              {activeModule === 'letters' && <Letters />}
+              {activeModule === 'helpdesk' && <HelpDesk />}
+            </>
+          )}
         </main>
       </div>
       <Chatbot />

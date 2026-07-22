@@ -43,6 +43,7 @@ import {
   useUpdateEmployeePersonal,
   useUpdateEmployeeSalary
 } from '../api/hook/useEmployee';
+import { useLeaveAllocations } from '../api/hook/useLeave';
 import { useCreateFeedback, useCreateMonthlyRating, useFeedbacks, useMonthlyRatings } from '../api/hook/usePerformance';
 import {
   useAssignRole,
@@ -53,7 +54,6 @@ import {
   useRoles,
   useUpdateRole
 } from '../api/hook/useRole';
-import { useLeaveAllocations } from '../api/hook/useLeave';
 import { Employee, useApp } from '../context/AppContext';
 
 interface RoleManagementPanelProps {
@@ -86,6 +86,17 @@ const RoleManagementPanel: React.FC<RoleManagementPanelProps> = ({ employees }) 
   const permissions = permissionsResponse?.data || [];
 
   const activeRole = roles.find(r => r.id === selectedRoleId);
+
+  const [selectedPermissionIds, setSelectedPermissionIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (activeRole) {
+      const currentPermissionIds = (activeRole.permissions || []).map((p: any) => p.permission?.id || p.id || p);
+      setSelectedPermissionIds(currentPermissionIds);
+    } else {
+      setSelectedPermissionIds([]);
+    }
+  }, [activeRole]);
 
   const handleCreateRole = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,22 +134,27 @@ const RoleManagementPanel: React.FC<RoleManagementPanelProps> = ({ employees }) 
   };
 
   const handleTogglePermission = (permissionId: string) => {
-    if (!activeRole) return;
-    const currentPermissionIds = (activeRole.permissions || []).map((p: any) => p.permission?.id || p.id || p);
-    
-    let updatedIds: string[];
-    if (currentPermissionIds.includes(permissionId)) {
-      updatedIds = currentPermissionIds.filter((id: string) => id !== permissionId);
-    } else {
-      updatedIds = [...currentPermissionIds, permissionId];
-    }
+    setSelectedPermissionIds(prev => 
+      prev.includes(permissionId) 
+        ? prev.filter(id => id !== permissionId) 
+        : [...prev, permissionId]
+    );
+  };
 
+  const handleSelectAllPermissions = () => {
+    const allPermissionIds = permissions.map((p) => p.id);
+    const allSelected = allPermissionIds.every(id => selectedPermissionIds.includes(id));
+    setSelectedPermissionIds(allSelected ? [] : allPermissionIds);
+  };
+
+  const handleSavePermissions = () => {
+    if (!activeRole) return;
     updateRoleMutation.mutate({
       id: activeRole.id,
-      data: { permissionIds: updatedIds }
+      data: { permissionIds: selectedPermissionIds }
     }, {
       onSuccess: () => {
-        alert("Permissions updated for role " + activeRole.name);
+        alert("Permissions saved successfully for role " + activeRole.name);
       },
       onError: (err) => alert(err.message)
     });
@@ -270,35 +286,56 @@ const RoleManagementPanel: React.FC<RoleManagementPanelProps> = ({ employees }) 
               
               {/* Permission Assignment Checklist */}
               <div className="space-y-3">
-                <h4 className="font-bold text-slate-700 dark:text-white text-xs">Assigned Permissions</h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-700 dark:text-white text-xs">Assigned Permissions</h4>
+                  {activeRole && permissions.length > 0 && (
+                    <button 
+                      type="button"
+                      onClick={handleSelectAllPermissions}
+                      className="text-[10px] text-primary hover:underline font-bold"
+                    >
+                      {permissions.map(p => p.id).every(id => selectedPermissionIds.includes(id)) 
+                        ? "Deselect All" 
+                        : "Select All"}
+                    </button>
+                  )}
+                </div>
                 {permissionsLoading ? (
                   <p className="text-slate-400">Loading permission nodes...</p>
                 ) : permissions.length === 0 ? (
                   <p className="text-slate-405">No system permissions found. Define one in the creation panel.</p>
                 ) : (
-                  <div className="space-y-1.5 max-h-96 overflow-y-auto border p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950">
-                    {permissions.map((perm) => {
-                      const isAssigned = (activeRole.permissions || []).some(
-                        (p: any) => (p.permission?.id || p.id || p) === perm.id
-                      );
-                      return (
-                        <label key={perm.id} className="flex items-start gap-2.5 p-1 cursor-pointer select-none">
-                          <input 
-                            type="checkbox"
-                            checked={isAssigned}
-                            onChange={() => handleTogglePermission(perm.id)}
-                            className="rounded text-primary focus:ring-0 mt-0.5"
-                          />
-                          <div>
-                            <span className="font-bold text-slate-700 dark:text-slate-350">{perm.name}</span>
-                            <span className="block text-[9px] text-slate-400">
-                              Action: <span className="font-mono text-primary">{perm.action}</span> | Subject: <span className="font-mono text-indigo-500">{perm.subject}</span>
-                            </span>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <>
+                    <div className="space-y-1.5 max-h-96 overflow-y-auto border p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950">
+                      {permissions.map((perm) => {
+                        const isAssigned = selectedPermissionIds.includes(perm.id);
+                        return (
+                          <label key={perm.id} className="flex items-start gap-2.5 p-1 cursor-pointer select-none">
+                            <input 
+                              type="checkbox"
+                              checked={isAssigned}
+                              onChange={() => handleTogglePermission(perm.id)}
+                              className="rounded text-primary focus:ring-0 mt-0.5"
+                            />
+                            <div>
+                              <span className="font-bold text-slate-700 dark:text-slate-350">{perm.name}</span>
+                              <span className="block text-[9px] text-slate-400">
+                                Action: <span className="font-mono text-primary">{perm.action}</span> | Subject: <span className="font-mono text-indigo-500">{perm.subject}</span>
+                              </span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={handleSavePermissions}
+                      disabled={updateRoleMutation.isPending}
+                      className="w-full py-2 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-1.5 hover:scale-102 transition-all shadow-md shadow-primary/20 disabled:opacity-50"
+                    >
+                      {updateRoleMutation.isPending ? "Saving Permissions..." : "Save Assigned Permissions"}
+                    </button>
+                  </>
                 )}
               </div>
 
