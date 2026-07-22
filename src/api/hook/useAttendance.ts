@@ -171,10 +171,6 @@ export const useCreateGeofence = () => {
   });
 };
 
-/**
- * Hook to delete a geofence location
- * DELETE /api/v1/attendance/geofences/:id
- */
 export const useDeleteGeofence = () => {
   const queryClient = useQueryClient();
   return useMutation<BaseResponse<any>, Error, string>({
@@ -184,6 +180,70 @@ export const useDeleteGeofence = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['geofenceLocations'] });
+    },
+  });
+};
+
+export interface ShiftRosterItem {
+  id: string;
+  employeeId: string;
+  week: string;
+  mon: string;
+  tue: string;
+  wed: string;
+  thu: string;
+  fri: string;
+  sat: string;
+  sun: string;
+  employee?: {
+    id: string;
+    name: string;
+    designation: string;
+  };
+}
+
+/**
+ * Hook to retrieve roster assignments for a given week
+ * GET /api/v1/attendance/rosters?week=...
+ */
+export const useRosters = (week: string) => {
+  return useQuery<BaseResponse<ShiftRosterItem[]>, Error>({
+    queryKey: ['shiftRosters', week],
+    queryFn: async () => {
+      const response = await apiClient.get<BaseResponse<ShiftRosterItem[]>>(`/attendance/rosters`, {
+        params: { week },
+      });
+      return response.data;
+    },
+    enabled: !!week,
+  });
+};
+
+/**
+ * Hook to save weekly shift roster assignments
+ * POST /api/v1/attendance/rosters
+ */
+export const useSaveRosters = () => {
+  const queryClient = useQueryClient();
+  return useMutation<BaseResponse<any>, Error, {
+    week: string;
+    rosters: Array<{
+      employeeId: string;
+      mon: string;
+      tue: string;
+      wed: string;
+      thu: string;
+      fri: string;
+      sat: string;
+      sun: string;
+    }>;
+  }>({
+    mutationFn: async (payload) => {
+      const response = await apiClient.post<BaseResponse<any>>('/attendance/rosters', payload);
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['shiftRosters', variables.week] });
     },
   });
 };

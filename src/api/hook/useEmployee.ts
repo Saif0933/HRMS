@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../apiClient';
 
 // Type definitions matching the backend Prisma models, validators, and controllers
@@ -90,8 +90,9 @@ export interface CreateEmployeeRequest {
   firstName?: string;
   lastName?: string;
   name?: string;
-  email: string;
+  email?: string;
   phone?: string | null;
+  password?: string | null;
   avatar?: string | null;
   status?: 'ACTIVE' | 'ON_LEAVE' | 'TERMINATED' | 'RESIGNED' | 'PROBATION';
   joiningDate: string;

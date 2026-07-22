@@ -25,6 +25,8 @@ import {
   useGeofences,
   useCreateGeofence,
   useDeleteGeofence,
+  useRosters,
+  useSaveRosters,
   PunchLog,
   GeofenceLocation
 } from '../api/hook/useAttendance';
@@ -366,14 +368,31 @@ export const Attendance: React.FC = () => {
   const [reportYear, setReportYear] = useState('2026');
   const [reportSearch, setReportSearch] = useState('');
 
-  // Dynamic Roster Shift States
+  // Dynamic Roster Shift States & Backend API Hooks
   const [rosterWeek, setRosterWeek] = useState('Week 27 (Jul 1 - Jul 5)');
   const [rosterSearch, setRosterSearch] = useState('');
   const [employeeShifts, setEmployeeShifts] = useState<Record<string, Record<string, string>>>({});
 
-  // Initialize roster assignments when live employees list loads
+  const { data: dbRostersRes, isLoading: rostersLoading } = useRosters(rosterWeek);
+  const saveRostersMut = useSaveRosters();
+
+  // Populate shift data from backend DB when fetched, or fallback to live employee defaults
   useEffect(() => {
-    if (employeesList.length > 0) {
+    if (dbRostersRes?.data && dbRostersRes.data.length > 0) {
+      const loaded: Record<string, Record<string, string>> = {};
+      dbRostersRes.data.forEach(item => {
+        loaded[item.employeeId] = {
+          Mon: item.mon,
+          Tue: item.tue,
+          Wed: item.wed,
+          Thu: item.thu,
+          Fri: item.fri,
+          Sat: item.sat,
+          Sun: item.sun,
+        };
+      });
+      setEmployeeShifts(loaded);
+    } else if (employeesList.length > 0) {
       setEmployeeShifts(prev => {
         const updated = { ...prev };
         employeesList.forEach((emp, index) => {
@@ -392,7 +411,7 @@ export const Attendance: React.FC = () => {
         return updated;
       });
     }
-  }, [employeesList]);
+  }, [dbRostersRes, employeesList]);
 
   const handleShiftChange = (empId: string, day: string, shiftVal: string) => {
     setEmployeeShifts(prev => ({
@@ -405,8 +424,29 @@ export const Attendance: React.FC = () => {
   };
 
   const handleSaveRoster = () => {
-    addAuditLog("Published Shift Roster", "Attendance Module", `Published weekly roster shifts for ${employeesList.length} employees for ${rosterWeek}.`);
-    alert(`Weekly Roster Plan for ${rosterWeek} has been successfully updated and saved for all ${employeesList.length} employees!`);
+    const payloadRosters = Object.entries(employeeShifts).map(([empId, days]) => ({
+      employeeId: empId,
+      mon: days.Mon || 'General',
+      tue: days.Tue || 'General',
+      wed: days.Wed || 'General',
+      thu: days.Thu || 'General',
+      fri: days.Fri || 'General',
+      sat: days.Sat || 'Week Off',
+      sun: days.Sun || 'Week Off',
+    }));
+
+    saveRostersMut.mutate({
+      week: rosterWeek,
+      rosters: payloadRosters,
+    }, {
+      onSuccess: () => {
+        addAuditLog("Published Shift Roster", "Attendance Module", `Published weekly roster shifts for ${payloadRosters.length} employees for ${rosterWeek}.`);
+        alert(`Weekly Roster Plan for ${rosterWeek} has been successfully saved to DB and published!`);
+      },
+      onError: (err: any) => {
+        alert(err?.response?.data?.message || err.message || "Failed to save roster to backend");
+      }
+    });
   };
 
   // Attendance Calendar (Muster Roll) grid for July 2026
@@ -1052,10 +1092,11 @@ export const Attendance: React.FC = () => {
               <button
                 type="button"
                 onClick={handleSaveRoster}
-                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+                disabled={saveRostersMut.isPending}
+                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Check className="h-4 w-4 text-white" />
-                <span>Save & Publish Roster</span>
+                <span>{saveRostersMut.isPending ? 'Saving to DB...' : 'Save & Publish Roster'}</span>
               </button>
             </div>
           </div>
@@ -1082,7 +1123,7 @@ export const Attendance: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y text-slate-650 dark:text-slate-350">
-                {employeesLoading ? (
+                {employeesLoading || rostersLoading ? (
                   <tr>
                     <td colSpan={8} className="p-8 text-center text-slate-400 font-semibold">
                       Loading roster staff database...

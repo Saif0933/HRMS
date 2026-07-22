@@ -1231,9 +1231,10 @@ export const EmployeeManagement: React.FC = () => {
     earnedLeave?: number;
     maternityPaternityLeave?: number;
     leavePolicy?: string;
+    password?: string;
   }>({
     id: `EMP${String(Date.now()).slice(-3)}${Math.floor(10 + Math.random() * 90)}`,
-    name: '', role: '', department: 'Engineering', status: 'Probation',
+    name: '', email: '', password: '', role: '', department: 'Engineering', status: 'Probation',
     joiningDate: new Date().toISOString().split('T')[0], location: 'Mumbai',
     manager: 'Neha Patel', basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
     bankName: '', bankAccount: '', ifsc: '', pan: '', aadhaar: '', uan: '', pfNumber: '',
@@ -1396,6 +1397,7 @@ export const EmployeeManagement: React.FC = () => {
       name: newEmp.name!,
       email: newEmp.email || `${newEmp.name?.toLowerCase().replace(/\s+/g, '')}@example.com`,
       phone: newEmp.phone || null,
+      password: newEmp.password || null,
       avatar: newEmp.avatar || (newEmp.gender === 'Female' 
         ? "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120"
         : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120"),
@@ -1504,7 +1506,7 @@ export const EmployeeManagement: React.FC = () => {
         setStepperStep(1);
         setNewEmp({
           id: `EMP${String(Date.now()).slice(-3)}${Math.floor(10 + Math.random() * 90)}`,
-          name: '', role: '', department: 'Engineering', status: 'Probation',
+          name: '', email: '', password: '', role: '', department: 'Engineering', status: 'Probation',
           joiningDate: new Date().toISOString().split('T')[0], location: 'Mumbai',
           manager: 'Neha Patel', basic: 30000, hra: 12000, allowance: 8000, deductions: 2000, netSalary: 38000,
           bankName: '', bankAccount: '', ifsc: '', pan: '', aadhaar: '', uan: '', pfNumber: '',
@@ -3286,6 +3288,26 @@ export const EmployeeManagement: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Work Email Address</label>
+                  <input 
+                    type="email" 
+                    value={newEmp.email || ''} 
+                    onChange={(e) => setNewEmp({ ...newEmp, email: e.target.value })}
+                    placeholder="e.g. employee@company.com" 
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Account Password</label>
+                  <input 
+                    type="password" 
+                    value={newEmp.password || ''} 
+                    onChange={(e) => setNewEmp({ ...newEmp, password: e.target.value })}
+                    placeholder="••••••••" 
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
                   <label className="text-slate-400 font-medium">Phone Number</label>
                   <input 
                     type="tel" 
@@ -3633,6 +3655,8 @@ export const EmployeeManagement: React.FC = () => {
                 <p className="font-bold text-slate-800 dark:text-white">Verify all fields match legal physical documents:</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div><span className="text-slate-400">Name</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.name || "N/A"}</p></div>
+                  <div><span className="text-slate-400">Email Address</span><p className="font-semibold text-slate-800 dark:text-white truncate">{newEmp.email || "N/A"}</p></div>
+                  <div><span className="text-slate-400">Account Password</span><p className="font-semibold text-slate-800 dark:text-white font-mono">{newEmp.password ? '••••••••' : "Auto-generated"}</p></div>
                   <div><span className="text-slate-400">Role</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.role || "N/A"}</p></div>
                   <div><span className="text-slate-400">Department</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.department}</p></div>
                   <div><span className="text-slate-400">Salary Package (Net)</span><p className="font-semibold text-slate-800 dark:text-white">₹{newEmp.netSalary?.toLocaleString()}</p></div>
