@@ -48,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileO
         { id: 'master', label: 'Employee Master' },
         { id: 'orgchart', label: 'Organization Chart' },
         { id: 'exit', label: 'Exit & Settlement' },
-        { id: 'resignation-archive', label: 'Resignation Archive' },
+        { id: 'resignation', label: 'Resignation Archive' },
         { id: 'bulk', label: 'Bulk Imports & Exports' },
         { id: 'roles', label: 'Role & Permissions' },
         { id: 'departments', label: 'Departments' }
@@ -231,7 +231,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileO
                 if (subId === 'master') return 'VIEW_EMPLOYEE_MASTER';
                 if (subId === 'orgchart') return 'VIEW_ORGANIZATION_CHART';
                 if (subId === 'exit') return 'VIEW_EXIT_SETTLEMENT';
-                if (subId === 'resignation-archive') return 'VIEW_EXIT_SETTLEMENT';
+                if (subId === 'resignation') return 'VIEW_EXIT_SETTLEMENT';
                 if (subId === 'bulk') return 'MANAGE_BULK_IMPORTS';
                 if (subId === 'roles') return 'VIEW_ROLES_PERMISSIONS';
                 if (subId === 'departments') return 'VIEW_DEPARTMENTS';
