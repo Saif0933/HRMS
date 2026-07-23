@@ -16,6 +16,7 @@ export interface PunchLog {
   lat: number;
   lng: number;
   selfiePreview: string | null;
+  createdAt?: string;
 }
 
 export interface RegularizationRequest {

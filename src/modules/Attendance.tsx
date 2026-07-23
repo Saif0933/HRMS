@@ -2,34 +2,32 @@ import {
   Camera,
   Check,
   Clock,
+  Compass,
   Download,
   FileText,
   Filter,
   Lock,
+  MapPin,
   Search,
   Users,
-  X,
-  Compass,
-  MapPin
+  X
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import Webcam from 'react-webcam';
-import { useApp } from '../context/AppContext';
-import { useEmployees } from '../api/hook/useEmployee';
 import {
-  usePunches,
-  useCreatePunch,
-  useRegularizations,
   useApplyRegularization,
-  useUpdateRegularization,
-  useGeofences,
   useCreateGeofence,
+  useCreatePunch,
   useDeleteGeofence,
+  useGeofences,
+  usePunches,
+  useRegularizations,
   useRosters,
   useSaveRosters,
-  PunchLog,
-  GeofenceLocation
+  useUpdateRegularization
 } from '../api/hook/useAttendance';
+import { useEmployees } from '../api/hook/useEmployee';
+import { useApp } from '../context/AppContext';
 
 export const Attendance: React.FC = () => {
   const { activeSubModule, setActiveSubModule, addAuditLog, userRole } = useApp();
@@ -1006,14 +1004,14 @@ export const Attendance: React.FC = () => {
               <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex items-center justify-between">
                 <span>Session Punch Register</span>
                 <span className="px-2 py-0.5 rounded-full text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold uppercase">
-                  Today's Logs
+                  Punch History ({punchLogList.length})
                 </span>
               </h3>
               
               {punchesLoading ? (
                 <div className="py-8 text-center text-slate-400 font-medium">Loading session logs...</div>
               ) : punchLogList.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 font-medium italic">No check-in or out punches recorded today.</div>
+                <div className="py-8 text-center text-slate-400 font-medium italic">No check-in or out punches recorded yet.</div>
               ) : (
                 <div className="grid grid-cols-1 gap-2.5 max-h-[300px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
                   {punchLogList.map((log) => (
@@ -1033,7 +1031,7 @@ export const Attendance: React.FC = () => {
                           </p>
                         </div>
                       </div>
-                      <span className="font-bold text-slate-700 dark:text-slate-200 shrink-0">{log.time}</span>
+                      <span className={`font-bold text-xs shrink-0 ${log.time.startsWith('Today') ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}`}>{log.time}</span>
                     </div>
                   ))}
                 </div>
