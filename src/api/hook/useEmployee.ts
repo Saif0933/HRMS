@@ -60,6 +60,9 @@ export interface Employee {
   qualification?: string | null;
   university?: string | null;
   passingYear?: string | null;
+  fatherName?: string | null;
+  permanentAddress?: string | null;
+  languagesSpoken?: string | null;
 
   // Workflows & Exit
   probationDuration?: string | null;
@@ -144,6 +147,9 @@ export interface PersonalDetails {
   qualification: string | null;
   university: string | null;
   passingYear: string | null;
+  fatherName?: string | null;
+  permanentAddress?: string | null;
+  languagesSpoken?: string | null;
 }
 
 /**

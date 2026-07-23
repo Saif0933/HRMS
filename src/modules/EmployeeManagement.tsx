@@ -1,58 +1,58 @@
 import {
-  ArrowLeft,
-  Award,
-  Building2,
-  ChevronRight,
-  Download,
-  FileDown,
-  FileSignature,
-  FileText,
-  Filter,
-  Grid,
-  Landmark,
-  List,
-  Mail,
-  MapPin,
-  QrCode,
-  Search,
-  ShieldCheck,
-  Trash2,
-  TrendingUp,
-  Upload,
-  User
+    ArrowLeft,
+    Award,
+    Building2,
+    ChevronRight,
+    Download,
+    FileDown,
+    FileSignature,
+    FileText,
+    Filter,
+    Grid,
+    Landmark,
+    List,
+    Mail,
+    MapPin,
+    QrCode,
+    Search,
+    ShieldCheck,
+    Trash2,
+    TrendingUp,
+    Upload,
+    User
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Department,
-  useCreateDepartment,
-  useDeleteDepartment,
-  useDepartments,
-  useUpdateDepartment
+    Department,
+    useCreateDepartment,
+    useDeleteDepartment,
+    useDepartments,
+    useUpdateDepartment
 } from '../api/hook/useDepartment';
 import {
-  useAddEmployeeFamily,
-  useCreateEmployee,
-  useDeleteEmployee,
-  useDeleteEmployeeFamily,
-  useEmployeeExit,
-  useEmployeeFamily,
-  useEmployeePersonal,
-  useEmployees,
-  useEmployeeSalary,
-  useSaveEmployeeExit,
-  useUpdateEmployeePersonal,
-  useUpdateEmployeeSalary
+    useAddEmployeeFamily,
+    useCreateEmployee,
+    useDeleteEmployee,
+    useDeleteEmployeeFamily,
+    useEmployeeExit,
+    useEmployeeFamily,
+    useEmployeePersonal,
+    useEmployees,
+    useEmployeeSalary,
+    useSaveEmployeeExit,
+    useUpdateEmployeePersonal,
+    useUpdateEmployeeSalary
 } from '../api/hook/useEmployee';
 import { useLeaveAllocations } from '../api/hook/useLeave';
 import { useCreateFeedback, useCreateMonthlyRating, useFeedbacks, useMonthlyRatings } from '../api/hook/usePerformance';
 import {
-  useAssignRole,
-  useCreatePermission,
-  useCreateRole,
-  useDeleteRole,
-  usePermissions,
-  useRoles,
-  useUpdateRole
+    useAssignRole,
+    useCreatePermission,
+    useCreateRole,
+    useDeleteRole,
+    usePermissions,
+    useRoles,
+    useUpdateRole
 } from '../api/hook/useRole';
 import { Employee, useApp } from '../context/AppContext';
 
@@ -822,8 +822,24 @@ export const EmployeeManagement: React.FC = () => {
   const updateSalaryMutation = useUpdateEmployeeSalary();
   const updatePersonalMutation = useUpdateEmployeePersonal();
 
-  // Dynamic Role & Department Override State
-  const [empOverridesMap, setEmpOverridesMap] = useState<Record<string, { role?: string; department?: string; basic?: number; netSalary?: number; status?: Employee['status']; clearanceStatus?: Employee['clearanceStatus'] }>>({});
+  // Dynamic Role & Department Override State with LocalStorage Persistence
+  const [empOverridesMap, setEmpOverridesMap] = useState<Record<string, { role?: string; department?: string; basic?: number; netSalary?: number; status?: Employee['status']; clearanceStatus?: Employee['clearanceStatus'] }>>(() => {
+    try {
+      const saved = localStorage.getItem('hrms_emp_overrides_map');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('hrms_emp_overrides_map', JSON.stringify(empOverridesMap));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [empOverridesMap]);
+
   const [selectedExitEmpId, setSelectedExitEmpId] = useState('');
   const [resignationSearchTerm, setResignationSearchTerm] = useState('');
   const [resignationDeptFilter, setResignationDeptFilter] = useState('All');
@@ -906,6 +922,9 @@ export const EmployeeManagement: React.FC = () => {
       qualification: emp.qualification || '',
       university: emp.university || '',
       passingYear: emp.passingYear || '',
+      fatherName: emp.fatherName || '',
+      permanentAddress: emp.permanentAddress || '',
+      languagesSpoken: emp.languagesSpoken || '',
       pastCompanies: (emp as any).pastCompanies || [],
       promotions: (emp as any).promotions || [],
       transfers: (emp as any).transfers || [],
@@ -1269,6 +1288,9 @@ export const EmployeeManagement: React.FC = () => {
     maternityPaternityLeave?: number;
     leavePolicy?: string;
     password?: string;
+    fatherName?: string;
+    permanentAddress?: string;
+    languagesSpoken?: string;
   }>({
     id: `EMP${String(Date.now()).slice(-3)}${Math.floor(10 + Math.random() * 90)}`,
     name: '', email: '', password: '', role: '', department: 'Engineering', status: 'Probation',
@@ -1282,7 +1304,8 @@ export const EmployeeManagement: React.FC = () => {
     spouseName: '', spouseRelation: 'Spouse', spouseDob: '', spouseContact: '',
     dependentName: '', dependentRelation: 'Child', dependentDob: '',
     casualLeave: 12, sickLeave: 12, earnedLeave: 15, maternityPaternityLeave: 10,
-    leavePolicy: 'Standard Corporate Leave Policy 2026'
+    leavePolicy: 'Standard Corporate Leave Policy 2026',
+    fatherName: '', permanentAddress: '', languagesSpoken: ''
   });
 
   // Exit & Clearance Workflow State
@@ -1438,7 +1461,7 @@ export const EmployeeManagement: React.FC = () => {
       avatar: newEmp.avatar || (newEmp.gender === 'Female' 
         ? "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120"
         : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120"),
-      status: (newEmp.status?.toUpperCase() || 'PROBATION') as any,
+      status: (newEmp.status === 'On Leave' ? 'ON_LEAVE' : newEmp.status?.toUpperCase() || 'PROBATION') as any,
       joiningDate: newEmp.joiningDate || new Date().toISOString().split('T')[0],
       location: newEmp.location || null,
       designation: newEmp.role || null,
@@ -1461,6 +1484,9 @@ export const EmployeeManagement: React.FC = () => {
       qualification: newEmp.qualification || null,
       university: newEmp.university || null,
       passingYear: newEmp.passingYear || null,
+      fatherName: newEmp.fatherName || null,
+      permanentAddress: newEmp.permanentAddress || null,
+      languagesSpoken: newEmp.languagesSpoken || null,
       probationDuration: newEmp.probationDuration || null,
       probationEnd: newEmp.probationEnd || null,
       confirmationStatus: (newEmp.confirmationStatus?.toUpperCase() || 'PENDING') as any,
@@ -1552,7 +1578,8 @@ export const EmployeeManagement: React.FC = () => {
           promotions: [], transfers: [], probationDuration: '6 Months', probationEnd: '',
           confirmationStatus: 'Pending', assets: ['AST-100 (ID Card)'],
           spouseName: '', spouseRelation: 'Spouse', spouseDob: '', spouseContact: '',
-          dependentName: '', dependentRelation: 'Child', dependentDob: ''
+          dependentName: '', dependentRelation: 'Child', dependentDob: '',
+          fatherName: '', permanentAddress: '', languagesSpoken: ''
         });
         
         setActiveSubModule('directory');
@@ -2006,28 +2033,70 @@ export const EmployeeManagement: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => handleDeleteEmployee(activeEmployee.id)}
-                disabled={deleteEmployeeMutation.isPending}
-                className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-semibold hover:scale-105 transition-all shadow-md shadow-red-500/10 disabled:opacity-50"
-              >
-                Delete Profile
-              </button>
-              <button 
-                onClick={() => {
-                  alert("Triggering warning letter generation for " + activeEmployee.name);
-                }}
-                className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-950 rounded-xl text-xs font-semibold transition-colors"
-              >
-                Issue Letter
-              </button>
-              <button 
-                onClick={handleOpenPromoteModal}
-                className="px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-semibold hover:scale-105 transition-all shadow-md shadow-primary/10"
-              >
-                Promote / Transfer
-              </button>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => handleDeleteEmployee(activeEmployee.id)}
+                  disabled={deleteEmployeeMutation.isPending}
+                  className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-semibold hover:scale-105 transition-all shadow-md shadow-red-500/10 disabled:opacity-50"
+                >
+                  Delete Profile
+                </button>
+                <button 
+                  onClick={() => {
+                    alert("Triggering warning letter generation for " + activeEmployee.name);
+                  }}
+                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 hover:bg-slate-50 dark:hover:bg-slate-950 rounded-xl text-xs font-semibold transition-colors"
+                >
+                  Issue Letter
+                </button>
+                <button 
+                  onClick={handleOpenPromoteModal}
+                  className="px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-semibold hover:scale-105 transition-all shadow-md shadow-primary/10"
+                >
+                  Promote / Transfer
+                </button>
+              </div>
+
+              {/* Dynamic Employee Status Dropdown Button below Promote / Transfer */}
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1">
+                <span className="text-[10px] text-slate-400 font-bold uppercase">Status:</span>
+                <select
+                  value={activeEmployee.status}
+                  onChange={(e) => {
+                    const newStatusVal = e.target.value as Employee['status'];
+                    setEmpOverridesMap(prev => ({
+                      ...prev,
+                      [activeEmployee.id]: {
+                        ...(prev[activeEmployee.id] || {}),
+                        status: newStatusVal
+                      }
+                    }));
+                    if (updatePersonalMutation && updatePersonalMutation.mutate) {
+                      const apiStatusMap: Record<string, string> = {
+                        'Active': 'ACTIVE',
+                        'On Leave': 'ON_LEAVE',
+                        'Terminated': 'TERMINATED',
+                        'Resigned': 'RESIGNED',
+                        'Probation': 'PROBATION'
+                      };
+                      updatePersonalMutation.mutate({
+                        id: activeEmployee.id,
+                        data: { status: apiStatusMap[newStatusVal] || 'ACTIVE' } as any
+                      }, { onError: () => {} });
+                    }
+                    addAuditLog("Employee Status Updated", "Employee Center", `Updated status for ${activeEmployee.name} to ${newStatusVal}`);
+                    alert(`Employee ${activeEmployee.name} status updated to "${newStatusVal}" successfully!`);
+                  }}
+                  className="bg-transparent border-0 text-xs font-bold focus:outline-none cursor-pointer text-slate-800 dark:text-slate-200"
+                >
+                  <option value="Active">Active</option>
+                  <option value="On Leave">On Leave</option>
+                  <option value="Probation">Probation</option>
+                  <option value="Resigned">Resigned</option>
+                  <option value="Terminated">Terminated</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -2184,10 +2253,10 @@ export const EmployeeManagement: React.FC = () => {
                       <div><span className="text-slate-400 block text-[10px]">Contact Email</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150 truncate">{activeEmployee.email}</p></div>
                       <div><span className="text-slate-400 block text-[10px]">Contact Phone</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.phone || '+91 98765 43210'}</p></div>
                       <div><span className="text-slate-400 block text-[10px]">Nationality</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">Indian</p></div>
-                      <div><span className="text-slate-400 block text-[10px]">Father's / Guardian Name</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{(activeEmployee as any).spouseName || 'Rajendra Sharma'}</p></div>
-                      <div className="col-span-2 border-t pt-2 dark:border-slate-800"><span className="text-slate-400 block text-[10px]">Permanent Address</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{activeEmployee.location ? `${activeEmployee.location}, India` : 'Andheri East, Mumbai, Maharashtra 400069'}</p></div>
+                      <div><span className="text-slate-400 block text-[10px]">Father's / Guardian Name</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.fatherName || activeEmployee.fatherName || (activeEmployee as any).spouseName || 'Rajendra Sharma'}</p></div>
+                      <div className="col-span-2 border-t pt-2 dark:border-slate-800"><span className="text-slate-400 block text-[10px]">Permanent Address</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.permanentAddress || activeEmployee.permanentAddress || (activeEmployee.location ? `${activeEmployee.location}, India` : 'Andheri East, Mumbai, Maharashtra 400069')}</p></div>
                       <div className="col-span-2"><span className="text-slate-400 block text-[10px]">Emergency Contact</span><p className="font-semibold mt-0.5 text-emerald-600 dark:text-emerald-400 font-mono">{(familyMembersMap[activeEmployee.id]?.[0]?.contact) || (activeEmployee as any).spouseContact || '+91 98000 11223'} (Family Emergency Contact)</p></div>
-                      <div className="col-span-2"><span className="text-slate-400 block text-[10px]">Languages Spoken</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">English, Hindi, Marathi</p></div>
+                      <div className="col-span-2"><span className="text-slate-400 block text-[10px]">Languages Spoken</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.languagesSpoken || activeEmployee.languagesSpoken || 'English, Hindi, Marathi'}</p></div>
                     </div>
                   )}
                 </div>
@@ -3415,6 +3484,50 @@ export const EmployeeManagement: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Employee Status</label>
+                  <select 
+                    value={newEmp.status} 
+                    onChange={(e) => setNewEmp({ ...newEmp, status: e.target.value as any })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-semibold"
+                  >
+                    <option value="Active">ACTIVE</option>
+                    <option value="On Leave">ON_LEAVE</option>
+                    <option value="Terminated">TERMINATED</option>
+                    <option value="Resigned">RESIGNED</option>
+                    <option value="Probation">PROBATION</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Father's / Guardian Name</label>
+                  <input 
+                    type="text" 
+                    value={newEmp.fatherName || ''} 
+                    onChange={(e) => setNewEmp({ ...newEmp, fatherName: e.target.value })}
+                    placeholder="e.g. Rajendra Sharma" 
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Permanent Address</label>
+                  <input 
+                    type="text" 
+                    value={newEmp.permanentAddress || ''} 
+                    onChange={(e) => setNewEmp({ ...newEmp, permanentAddress: e.target.value })}
+                    placeholder="Enter permanent address" 
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-medium">Languages Spoken</label>
+                  <input 
+                    type="text" 
+                    value={newEmp.languagesSpoken || ''} 
+                    onChange={(e) => setNewEmp({ ...newEmp, languagesSpoken: e.target.value })}
+                    placeholder="e.g. English, Hindi, Marathi" 
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                  />
+                </div>
+                <div className="space-y-1">
                   <label className="text-slate-400 font-medium">Highest Academic Degree</label>
                   <input 
                     type="text" 
@@ -3696,9 +3809,13 @@ export const EmployeeManagement: React.FC = () => {
                   <div><span className="text-slate-400">Account Password</span><p className="font-semibold text-slate-800 dark:text-white font-mono">{newEmp.password ? '••••••••' : "Auto-generated"}</p></div>
                   <div><span className="text-slate-400">Role</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.role || "N/A"}</p></div>
                   <div><span className="text-slate-400">Department</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.department}</p></div>
+                  <div><span className="text-slate-400">Employee Status</span><p className="font-semibold text-primary font-bold">{newEmp.status?.toUpperCase()}</p></div>
                   <div><span className="text-slate-400">Salary Package (Net)</span><p className="font-semibold text-slate-800 dark:text-white">₹{newEmp.netSalary?.toLocaleString()}</p></div>
                   <div><span className="text-slate-400">Bank Account</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.bankAccount || "N/A"}</p></div>
                   <div><span className="text-slate-400">PAN</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.pan || "N/A"}</p></div>
+                  <div><span className="text-slate-400">Father's / Guardian Name</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.fatherName || "Not Provided"}</p></div>
+                  <div><span className="text-slate-400">Permanent Address</span><p className="font-semibold text-slate-800 dark:text-white truncate">{newEmp.permanentAddress || "Not Provided"}</p></div>
+                  <div><span className="text-slate-400">Languages Spoken</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.languagesSpoken || "Not Provided"}</p></div>
                   <div><span className="text-slate-400">Primary Nominee</span><p className="font-semibold text-slate-800 dark:text-white">{newEmp.spouseName || "Not Provided"}</p></div>
                   <div><span className="text-slate-400">Leave Quotas (CL/SL/EL)</span><p className="font-semibold text-emerald-600 font-bold">{newEmp.casualLeave || 12} / {newEmp.sickLeave || 12} / {newEmp.earnedLeave || 15} Days</p></div>
                 </div>

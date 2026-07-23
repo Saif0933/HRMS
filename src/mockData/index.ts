@@ -35,6 +35,9 @@ export interface Employee {
   qualification: string;
   university: string;
   passingYear: string;
+  fatherName?: string;
+  permanentAddress?: string;
+  languagesSpoken?: string;
   
   // Work History
   pastCompanies: { company: string; role: string; duration: string; ctc: string }[];
