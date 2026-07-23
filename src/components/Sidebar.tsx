@@ -46,6 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileO
       subItems: [
         { id: 'directory', label: 'Employee Directory' },
         { id: 'master', label: 'Employee Master' },
+        { id: 'idcard', label: 'ID Card Generator' },
         { id: 'orgchart', label: 'Organization Chart' },
         { id: 'exit', label: 'Exit & Settlement' },
         { id: 'resignation', label: 'Resignation Archive' },

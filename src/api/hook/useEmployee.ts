@@ -29,6 +29,7 @@ export interface Employee {
   joiningDate: string;
   location?: string | null;
   designation?: string | null;
+  role?: string | null;
 
   // Relations
   userId?: string | null;

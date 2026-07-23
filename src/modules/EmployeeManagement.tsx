@@ -55,6 +55,7 @@ import {
     useUpdateRole
 } from '../api/hook/useRole';
 import { Employee, useApp } from '../context/AppContext';
+import IdCardGenerator from './IdCardGenerator';
 
 interface RoleManagementPanelProps {
   employees: Employee[];
@@ -1762,6 +1763,19 @@ export const EmployeeManagement: React.FC = () => {
           }`}
         >
           Employee Onboarding Master
+        </button>
+        <button 
+          onClick={() => setActiveSubModule('idcard')}
+          className={`py-3 px-5 text-sm font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+            activeSubModule === 'idcard' 
+              ? 'border-primary text-primary' 
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <span>ID Card Generator</span>
+          <span className="text-[10px] bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-bold px-1.5 py-0.5 rounded-full">
+            New
+          </span>
         </button>
         <button 
           onClick={() => setActiveSubModule('orgchart')}
@@ -4868,6 +4882,13 @@ export const EmployeeManagement: React.FC = () => {
       {/* ======================================= */}
       {activeSubModule === 'departments' && (
         <DepartmentManagementPanel employees={employees} />
+      )}
+
+      {/* ======================================= */}
+      {/* 7. ID CARD GENERATOR                    */}
+      {/* ======================================= */}
+      {activeSubModule === 'idcard' && (
+        <IdCardGenerator />
       )}
 
       {/* ======================================= */}

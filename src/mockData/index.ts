@@ -11,6 +11,7 @@ export interface Employee {
   location: string;
   manager: string;
   userId?: string | null;
+  designation?: string;
   permissions?: string[];
   
   // Salary Details

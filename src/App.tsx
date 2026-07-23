@@ -21,6 +21,7 @@ import { Assets } from './modules/Assets';
 import { Letters } from './modules/Letters';
 import { HelpDesk } from './modules/HelpDesk';
 import { Login } from './modules/Login';
+import { IdCardGenerator } from './modules/IdCardGenerator';
 
 const MainLayout: React.FC = () => {
   const { activeModule, theme, isAuthenticated, currentUser } = useApp();
@@ -32,7 +33,7 @@ const MainLayout: React.FC = () => {
 
   const isSuperAdmin = currentUser?.role === 'Super Admin';
   const userPerms = currentUser?.permissions || [];
-  const hasAccess = activeModule === 'dashboard' || isSuperAdmin || userPerms.includes(`VIEW_${activeModule.toUpperCase()}`);
+  const hasAccess = activeModule === 'dashboard' || activeModule === 'idcard' || isSuperAdmin || userPerms.includes(`VIEW_${activeModule.toUpperCase()}`);
 
   return (
     <div className={`flex h-screen overflow-hidden ${theme === 'dark' ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
@@ -54,6 +55,7 @@ const MainLayout: React.FC = () => {
             <>
               {activeModule === 'dashboard' && <Dashboard />}
               {activeModule === 'employees' && <EmployeeManagement />}
+              {activeModule === 'idcard' && <IdCardGenerator />}
               {activeModule === 'attendance' && <Attendance />}
               {activeModule === 'leave' && <Leave />}
               {activeModule === 'payroll' && <Payroll />}
