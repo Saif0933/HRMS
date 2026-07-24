@@ -18,7 +18,7 @@ import {
 } from '../api/hook/useDocuments';
 
 export const Documents: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, showConfirm, showAlert } = useApp();
 
   // Simulated active employee switcher
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -58,40 +58,92 @@ export const Documents: React.FC = () => {
   const [docName, setDocName] = useState('');
   const [docCategory, setDocCategory] = useState<'Identity' | 'Contract' | 'Academic' | 'Tax'>('Identity');
   const [expiryDate, setExpiryDate] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (file: File | null) => {
+    if (!file) return;
+    setSelectedFile(file);
+    if (!docName.trim()) {
+      setDocName(file.name);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      handleFileSelect(file);
+      e.dataTransfer.clearData();
+    }
+  };
 
   const handleUploadDoc = (e: React.FormEvent) => {
     e.preventDefault();
     if (!docName.trim() || !selectedEmpId) return;
 
-    uploadDocMut.mutate({
-      employeeId: selectedEmpId,
-      name: docName,
-      category: docCategory,
-      expiresOn: expiryDate || null,
-    }, {
-      onSuccess: () => {
-        addAuditLog("Uploaded Document", "Document Vault", `Uploaded new document: ${docName} for employee ID ${selectedEmpId}`);
-        alert(`Document "${docName}" successfully uploaded to the vault!`);
-        setDocName('');
-        setExpiryDate('');
-        setActiveSubModule('vault');
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to upload document");
+    showConfirm({
+      title: "Confirm Document Upload",
+      message: `Are you sure you want to upload "${docName}" under ${docCategory} folder for the selected employee?`,
+      type: "confirm",
+      confirmText: "Upload Now",
+      onConfirm: () => {
+        uploadDocMut.mutate({
+          employeeId: selectedEmpId,
+          name: docName,
+          category: docCategory,
+          expiresOn: expiryDate || null,
+        }, {
+          onSuccess: () => {
+            addAuditLog("Uploaded Document", "Document Vault", `Uploaded new document: ${docName} for employee ID ${selectedEmpId}`);
+            showAlert(`Document "${docName}" successfully uploaded to the vault!`, "Upload Successful", "success");
+            setDocName('');
+            setExpiryDate('');
+            setSelectedFile(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            setActiveSubModule('vault');
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to upload document", "Upload Error", "danger");
+          }
+        });
       }
     });
   };
 
   const handleDeleteDoc = (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${name}"?`)) return;
-
-    deleteDocMut.mutate(id, {
-      onSuccess: () => {
-        addAuditLog("Deleted Document", "Document Vault", `Deleted document ${name} from vault`);
-        alert(`Document "${name}" deleted successfully.`);
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to delete document");
+    showConfirm({
+      title: "Delete Document",
+      message: `Are you sure you want to permanently remove "${name}" from the secure vault?`,
+      type: "danger",
+      confirmText: "Delete Document",
+      cancelText: "Cancel",
+      onConfirm: () => {
+        deleteDocMut.mutate(id, {
+          onSuccess: () => {
+            addAuditLog("Deleted Document", "Document Vault", `Deleted document ${name} from vault`);
+            showAlert(`Document "${name}" deleted successfully.`, "Deleted", "success");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to delete document", "Error", "danger");
+          }
+        });
       }
     });
   };
@@ -233,7 +285,7 @@ export const Documents: React.FC = () => {
                         
                         <div className="flex items-center gap-1.5">
                           <button 
-                            onClick={() => alert(`Downloading "${d.name}" file locker decryption stream...`)}
+                            onClick={() => showAlert(`Downloading "${d.name}" file locker decryption stream...`, "File Download Started", "info")}
                             className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg hover:scale-105 transition-all"
                             title="Download Document"
                           >
@@ -310,9 +362,63 @@ export const Documents: React.FC = () => {
 
             <div className="space-y-1 pt-2">
               <label className="text-slate-400 font-medium">Drop File Upload</label>
-              <div className="border-2 border-dashed rounded-xl p-8 text-center bg-slate-50 dark:bg-slate-950 cursor-pointer">
-                <Upload className="h-6 w-6 text-slate-450 mx-auto mb-2" />
-                <span className="font-bold text-slate-800 dark:text-slate-200">Drag & drop files or click to browse</span>
+              
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    handleFileSelect(e.target.files[0]);
+                  }
+                }}
+              />
+
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
+                  isDragging
+                    ? 'border-primary bg-primary/10 scale-[1.01]'
+                    : selectedFile
+                    ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:border-primary/50'
+                }`}
+              >
+                {selectedFile ? (
+                  <div className="flex flex-col items-center justify-center space-y-2">
+                    <FileText className="h-8 w-8 text-emerald-500" />
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-white">{selectedFile.name}</p>
+                      <p className="text-[10px] text-slate-400">
+                        {(selectedFile.size / 1024).toFixed(1)} KB • Ready for upload
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                      className="text-xs text-rose-500 underline font-semibold mt-1 hover:text-rose-600"
+                    >
+                      Remove / Change File
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="h-6 w-6 text-slate-450 mx-auto mb-2" />
+                    <span className="font-bold text-slate-800 dark:text-slate-200 block">
+                      Drag & drop files or click to browse
+                    </span>
+                    <span className="text-[10px] text-slate-400 mt-1 block">
+                      Supports PDF, PNG, JPG, DOCX (Max 10MB)
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 

@@ -38,7 +38,7 @@ import {
 } from '../api/hook/usePayroll';
 
 export const Payroll: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog, userRole } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, userRole, showConfirm, showAlert } = useApp();
   const isAdmin = userRole === 'Super Admin' || userRole === 'HR Admin';
 
 
@@ -154,27 +154,42 @@ export const Payroll: React.FC = () => {
   const empBonus = selectedRun ? selectedRun.bonus : 0;
   const empArrear = selectedRun ? selectedRun.arrear : 0;
 
-  // Handlers
-  const handleRunPayrollCycle = async () => {
+  const handleAdvanceCycle = async () => {
     if (!currentCycle) return;
     try {
       if (currentCycle.status === 'PENDING_ATTENDANCE_LOCK') {
-        await updateCycleStatusMutation.mutateAsync({
-          id: currentCycle.id,
-          status: 'PROCESSING_SALARIES',
+        showConfirm({
+          title: "Lock Attendance Cycle",
+          message: `Are you sure you want to lock attendance for ${reportMonth} ${reportYear} and trigger salary computation?`,
+          type: "confirm",
+          confirmText: "Lock & Compute",
+          onConfirm: async () => {
+            await updateCycleStatusMutation.mutateAsync({
+              id: currentCycle.id,
+              status: 'PROCESSING_SALARIES',
+            });
+            addAuditLog("Locked Attendance Cycle", "Payroll Processing", `${reportMonth} ${reportYear} attendance locked for computation.`);
+            showAlert("Attendance cycle locked successfully! Salaries computed.", "Cycle Locked", "success");
+          }
         });
-        addAuditLog("Locked Attendance Cycle", "Payroll Processing", `${reportMonth} ${reportYear} attendance locked for computation.`);
-        alert("Attendance cycle locked successfully! Salaries computed.");
       } else if (currentCycle.status === 'PROCESSING_SALARIES') {
-        await updateCycleStatusMutation.mutateAsync({
-          id: currentCycle.id,
-          status: 'DISBURSED',
+        showConfirm({
+          title: "Disburse Salaries",
+          message: "Confirm salary disbursement for all active employees and generate bank funding sheet?",
+          type: "confirm",
+          confirmText: "Disburse Now",
+          onConfirm: async () => {
+            await updateCycleStatusMutation.mutateAsync({
+              id: currentCycle.id,
+              status: 'DISBURSED',
+            });
+            addAuditLog("Disbursed Salaries", "Payroll Processing", `Completed salary disbursement for cycle.`);
+            showAlert("Salaries computed, Bank Funding sheet created, and funds disbursed!", "Salaries Disbursed", "success");
+          }
         });
-        addAuditLog("Disbursed Salaries", "Payroll Processing", `Completed salary disbursement for cycle.`);
-        alert("Salaries computed, Bank Funding sheet created, and funds disbursed!");
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || "Failed to update cycle status.");
+      showAlert(err.response?.data?.message || err.message || "Failed to update cycle status.", "Error", "danger");
     }
   };
 
@@ -190,8 +205,9 @@ export const Payroll: React.FC = () => {
       const isHeldCurrently = exclusions.some(ex => ex.employeeId === id);
       const action = isHeldCurrently ? "Revoked Stop Payment" : "Applied Stop Payment";
       addAuditLog(action, "Payroll Processing", `${action} for employee ${empName} (${id})`);
+      showAlert(`${action} for employee ${empName}`, "Stop Payment Updated", "info");
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || "Failed to toggle stop payment.");
+      showAlert(err.response?.data?.message || err.message || "Failed to toggle stop payment.", "Error", "danger");
     }
   };
 
@@ -199,23 +215,31 @@ export const Payroll: React.FC = () => {
     e.preventDefault();
     const targetEmpId = loanEmployeeId || dbEmployees[0]?.id;
     if (!targetEmpId) {
-      alert("No employee selected");
+      showAlert("No employee selected", "Selection Error", "warning");
       return;
     }
-    try {
-      await applyLoanMutation.mutateAsync({
-        employeeId: targetEmpId,
-        principal: loanPrincipal,
-        emi: loanEmi,
-        purpose: loanPurpose,
-      });
-      const empName = dbEmployees.find(e => e.id === targetEmpId)?.name;
-      addAuditLog("Loan Approved", "Payroll Processing", `Approved Advance/Loan request of ₹${loanPrincipal} for ${empName}`);
-      alert("Advance cash/loan request approved successfully.");
-      setLoanPurpose('');
-    } catch (err: any) {
-      alert(err.response?.data?.message || err.message || "Failed to approve loan.");
-    }
+    showConfirm({
+      title: "Approve Loan Request",
+      message: `Approve advance cash/loan request of ₹${loanPrincipal} with EMI ₹${loanEmi}?`,
+      type: "confirm",
+      confirmText: "Approve Loan",
+      onConfirm: async () => {
+        try {
+          await applyLoanMutation.mutateAsync({
+            employeeId: targetEmpId,
+            principal: loanPrincipal,
+            emi: loanEmi,
+            purpose: loanPurpose,
+          });
+          const empName = dbEmployees.find(e => e.id === targetEmpId)?.name;
+          addAuditLog("Loan Approved", "Payroll Processing", `Approved Advance/Loan request of ₹${loanPrincipal} for ${empName}`);
+          showAlert("Advance cash/loan request approved successfully.", "Loan Approved", "success");
+          setLoanPurpose('');
+        } catch (err: any) {
+          showAlert(err.response?.data?.message || err.message || "Failed to approve loan.", "Error", "danger");
+        }
+      }
+    });
   };
 
   const handleSaveTaxDeclarations = async (e: React.FormEvent) => {
@@ -231,9 +255,9 @@ export const Payroll: React.FC = () => {
         declaredHra,
       });
       addAuditLog("Saved Tax Declarations", "Payroll Processing", `Saved tax declarations for employee ID: ${targetEmpId}`);
-      alert("Declarations saved successfully!");
+      showAlert("Declarations saved successfully!", "Declarations Saved", "success");
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || "Failed to save declarations.");
+      showAlert(err.response?.data?.message || err.message || "Failed to save declarations.", "Error", "danger");
     }
   };
 
@@ -242,28 +266,36 @@ export const Payroll: React.FC = () => {
     try {
       await calculateArrearsMutation.mutateAsync(currentCycle.id);
       addAuditLog("Computed Arrears", "Payroll Processing", `Triggered arrears computation for cycle.`);
-      alert("Arrears calculated.");
+      showAlert("Arrears calculated successfully.", "Arrears Computed", "success");
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || "Failed to calculate arrears.");
+      showAlert(err.response?.data?.message || err.message || "Failed to calculate arrears.", "Error", "danger");
     }
   };
 
   const handleApplyIncrement = async () => {
     if (incrementPercentage <= 0) {
-      alert("Please enter a positive percentage");
+      showAlert("Please enter a positive percentage", "Invalid Input", "warning");
       return;
     }
-    try {
-      await applyRevisionMutation.mutateAsync({
-        incrementPercentage,
-        departmentId: null,
-      });
-      addAuditLog("Applied Increment", "Payroll Processing", `Applied bulk increment of ${incrementPercentage}% to active staff.`);
-      alert(`Applied ${incrementPercentage}% increment successfully!`);
-      setIncrementPercentage(0);
-    } catch (err: any) {
-      alert(err.response?.data?.message || err.message || "Failed to apply bulk revision.");
-    }
+    showConfirm({
+      title: "Apply Bulk Increment",
+      message: `Apply ${incrementPercentage}% increment across all active employees?`,
+      type: "confirm",
+      confirmText: "Apply Increment",
+      onConfirm: async () => {
+        try {
+          await applyRevisionMutation.mutateAsync({
+            incrementPercentage,
+            departmentId: null,
+          });
+          addAuditLog("Applied Increment", "Payroll Processing", `Applied bulk increment of ${incrementPercentage}% to active staff.`);
+          showAlert(`Applied ${incrementPercentage}% increment successfully!`, "Increment Applied", "success");
+          setIncrementPercentage(0);
+        } catch (err: any) {
+          showAlert(err.response?.data?.message || err.message || "Failed to apply bulk revision.", "Error", "danger");
+        }
+      }
+    });
   };
 
   const handleApplyIndividualRevision = async (e: React.FormEvent) => {
@@ -322,17 +354,17 @@ export const Payroll: React.FC = () => {
         `Revised salary for ${selectedEmployee.name} (${selectedEmployee.id}): Basic ₹${currentBasic.toLocaleString()} -> ₹${newBasic.toLocaleString()}. Effective: ${revEffectiveDate}. Reason: ${revReason}`
       );
 
-      alert(`Salary ${revType === 'increment' ? 'increment' : 'decrement'} of ${revMode === 'percent' ? `${revVal}%` : `₹${revVal.toLocaleString()}`} applied successfully for ${selectedEmployee.name}!`);
+      showAlert(`Salary ${revType === 'increment' ? 'increment' : 'decrement'} of ${revMode === 'percent' ? `${revVal}%` : `₹${revVal.toLocaleString()}`} applied successfully for ${selectedEmployee.name}!`, "Salary Revised", "success");
       setShowIndivRevModal(false);
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || "Failed to update employee salary.");
+      showAlert(err.response?.data?.message || err.message || "Failed to update employee salary.", "Error", "danger");
     }
   };
 
   const handleExecuteBulkRevision = async (e: React.FormEvent) => {
     e.preventDefault();
     if (bulkVal <= 0) {
-      alert("Please enter a valid revision value.");
+      showAlert("Please enter a valid revision value.", "Invalid Value", "warning");
       return;
     }
 
@@ -349,9 +381,9 @@ export const Payroll: React.FC = () => {
         `Applied bulk ${bulkMode === 'percent' ? `${bulkVal}%` : `₹${bulkVal}`} revision to ${bulkDeptFilter === 'ALL' ? 'all employees' : `department ${bulkDeptFilter}`}. Effective: ${bulkEffectiveDate}. Reason: ${bulkReason}`
       );
 
-      alert(`Bulk salary revision of ${bulkMode === 'percent' ? `${bulkVal}%` : `₹${bulkVal.toLocaleString()}`} applied successfully across selected employees!`);
+      showAlert(`Bulk salary revision of ${bulkMode === 'percent' ? `${bulkVal}%` : `₹${bulkVal.toLocaleString()}`} applied successfully across selected employees!`, "Bulk Revision Applied", "success");
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || "Failed to execute bulk salary revision.");
+      showAlert(err.response?.data?.message || err.message || "Failed to execute bulk salary revision.", "Error", "danger");
     } finally {
       setBulkSubmitting(false);
     }
@@ -449,7 +481,7 @@ export const Payroll: React.FC = () => {
 
             {currentCycle ? (
               <button 
-                onClick={handleRunPayrollCycle}
+                onClick={handleAdvanceCycle}
                 disabled={currentCycle.status === 'DISBURSED' || updateCycleStatusMutation.isPending}
                 className="w-full py-2.5 bg-primary text-white rounded-xl font-bold shadow-md shadow-primary/10 hover:scale-105 transition-all disabled:opacity-50 disabled:scale-100"
               >
@@ -649,11 +681,14 @@ export const Payroll: React.FC = () => {
       {/* ======================================= */}
       {/* 3. INVESTMENT DECLARATION               */}
       {/* ======================================= */}
+      {/* ======================================= */}
+      {/* 3. INVESTMENT DECLARATION               */}
+      {/* ======================================= */}
       {activeSubModule === 'investment' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6 animate-fade-in text-xs">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6 animate-fade-in text-xs">
           <div>
-            <h3 className="font-bold text-slate-800 dark:text-white text-sm">Income Tax IT Declaration Portal</h3>
-            <p className="text-slate-400 mt-1">Declare deductions under Section 80C, 80D, and HRA for tax exemption calculation.</p>
+            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b border-slate-200 dark:border-slate-800 pb-2">Income Tax IT Declaration Portal</h3>
+            <p className="text-slate-400 dark:text-slate-400 mt-1">Declare deductions under Section 80C, 80D, and HRA for tax exemption calculation.</p>
           </div>
 
           <form onSubmit={handleSaveTaxDeclarations} className="space-y-4 max-w-xl">
@@ -662,7 +697,7 @@ export const Payroll: React.FC = () => {
               <select 
                 value={selectedEmpId} 
                 onChange={(e) => setSelectedEmpId(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-semibold"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 font-semibold"
               >
                 {dbEmployees.map(e => (
                   <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
@@ -676,7 +711,7 @@ export const Payroll: React.FC = () => {
                 type="number" 
                 value={sec80C} 
                 onChange={(e) => setSec80C(Number(e.target.value))}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-750 dark:text-slate-200 font-semibold"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-semibold"
               />
             </div>
 
@@ -686,7 +721,7 @@ export const Payroll: React.FC = () => {
                 type="number" 
                 value={sec80D} 
                 onChange={(e) => setSec80D(Number(e.target.value))}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-750 dark:text-slate-200 font-semibold"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-semibold"
               />
             </div>
 
@@ -696,7 +731,7 @@ export const Payroll: React.FC = () => {
                 type="number" 
                 value={declaredHra} 
                 onChange={(e) => setDeclaredHra(Number(e.target.value))}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-750 dark:text-slate-200 font-semibold"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-semibold"
               />
             </div>
 
@@ -981,7 +1016,7 @@ export const Payroll: React.FC = () => {
                 onClick={() => {
                   setEcrGenerated(true);
                   addAuditLog("Generated ECR File", "Payroll Processing", `Generated PF ECR Challan file for ${reportMonth} ${reportYear}`);
-                  alert(`ECR file for ${reportMonth} ${reportYear} generated successfully!`);
+                  showAlert(`ECR file for ${reportMonth} ${reportYear} generated successfully!`, "ECR File Generated", "success");
                 }}
                 className="w-full py-2 bg-primary text-white rounded-xl font-bold hover:scale-105 transition-all shadow-md mt-2 flex items-center justify-center gap-1.5"
               >
@@ -1005,7 +1040,7 @@ export const Payroll: React.FC = () => {
                   </div>
                   <button 
                     onClick={() => {
-                      alert("Downloading ECR txt file...");
+                      showAlert("Downloading ECR txt file...", "File Download Started", "info");
                     }}
                     className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition-colors"
                   >
@@ -1188,7 +1223,7 @@ export const Payroll: React.FC = () => {
                   <select
                     value={selectedEmpId}
                     onChange={(e) => setSelectedEmpId(e.target.value)}
-                    className="px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-955 text-slate-800 dark:text-slate-200 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 text-xs min-w-[200px]"
+                    className="px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 text-xs min-w-[200px]"
                   >
                     {dbEmployees.map(emp => (
                       <option key={emp.id} value={emp.id}>
@@ -1214,10 +1249,10 @@ export const Payroll: React.FC = () => {
 
           {/* Section A: Individual Employee CTC Breakdown Card */}
           {selectedEmployee && (
-            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
               
               {/* Employee Summary Banner */}
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between pb-5 border-b border-slate-150 dark:border-slate-800 gap-4">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between pb-5 border-b border-slate-200 dark:border-slate-800 gap-4">
                 <div className="flex items-center gap-3.5">
                   <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-lg shadow-inner">
                     {selectedEmployee.name?.charAt(0) || 'E'}
@@ -1236,7 +1271,7 @@ export const Payroll: React.FC = () => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-4">
-                  <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-955 px-4 py-2.5 rounded-2xl border border-slate-150 dark:border-slate-800">
+                  <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-950 px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800">
                     <div className="text-right">
                       <span className="text-[10px] uppercase font-bold text-slate-400 block">Annual CTC</span>
                       <span className="text-base font-black text-indigo-600 dark:text-indigo-400">

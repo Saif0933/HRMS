@@ -12,7 +12,14 @@ import {
   Search,
   ShieldAlert,
   Sun,
-  X
+  X,
+  Users,
+  Laptop,
+  FileText,
+  CalendarDays,
+  Wallet,
+  ArrowRight,
+  CornerDownLeft
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { useApp, UserRole } from '../context/AppContext';
@@ -26,15 +33,40 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
     theme, setTheme, 
     language, setLanguage, 
     userRole, setUserRole, 
-    setActiveModule, setActiveSubModule,
+    setActiveModule, setActiveSubModule, setSelectedEmployeeId,
     notifications, markAllNotificationsRead, clearNotification,
     globalSearch, setGlobalSearch,
+    employees, assets, claims, leaveRequests, tickets,
     currentUser, logout
   } = useApp();
 
-  const [showNotifications, setShowNotifications] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLangDropdown, setShowLangDropdown] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const searchRef = React.useRef<HTMLDivElement>(null);
+  const profileRef = React.useRef<HTMLDivElement>(null);
+  const langRef = React.useRef<HTMLDivElement>(null);
+  const notifRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSearchResults(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfile(false);
+      }
+      if (langRef.current && !langRef.current.contains(e.target as Node)) {
+        setShowLangDropdown(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -62,6 +94,55 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
     console.log(alertMsg);
   };
 
+  const query = globalSearch.trim().toLowerCase();
+
+  // Search Results Computation
+  const matchingModules = [
+    { name: 'Employee Directory', module: 'employees', sub: 'directory', icon: Users, category: 'Module Navigation' },
+    { name: 'ID Card Generator', module: 'idcard', sub: 'idcard', icon: Users, category: 'Module Navigation' },
+    { name: 'Payroll Processing & Payslips', module: 'payroll', sub: 'process', icon: Wallet, category: 'Module Navigation' },
+    { name: 'Leave Application & Requests', module: 'leave', sub: 'apply', icon: CalendarDays, category: 'Module Navigation' },
+    { name: 'Asset Management Inventory', module: 'assets', sub: 'register', icon: Laptop, category: 'Module Navigation' },
+    { name: 'Document Vault', module: 'documents', sub: 'vault', icon: FileText, category: 'Module Navigation' },
+    { name: 'HR Help Desk & Tickets', module: 'helpdesk', sub: 'tickets', icon: HelpCircle, category: 'Module Navigation' },
+    { name: 'Subscription & Plans', module: 'subscription', sub: 'subscription', icon: Wallet, category: 'Module Navigation' },
+  ].filter(m => query && m.name.toLowerCase().includes(query));
+
+  const matchingEmployees = query
+    ? (employees || []).filter(e => 
+        e.name.toLowerCase().includes(query) || 
+        e.id.toLowerCase().includes(query) || 
+        e.role.toLowerCase().includes(query) ||
+        (typeof e.department === 'string' ? e.department : ((e.department as any)?.name || '')).toLowerCase().includes(query)
+      ).slice(0, 4)
+    : [];
+
+  const matchingAssets = query
+    ? (assets || []).filter(a => 
+        a.name.toLowerCase().includes(query) || 
+        a.serialNumber.toLowerCase().includes(query) ||
+        a.id.toLowerCase().includes(query)
+      ).slice(0, 3)
+    : [];
+
+  const matchingClaims = query
+    ? (claims || []).filter(c => 
+        c.employeeName.toLowerCase().includes(query) || 
+        c.type.toLowerCase().includes(query) ||
+        c.id.toLowerCase().includes(query)
+      ).slice(0, 3)
+    : [];
+
+  const totalResultsCount = matchingModules.length + matchingEmployees.length + matchingAssets.length + matchingClaims.length;
+
+  const navigateToResult = (module: string, subModule: string, empId?: string) => {
+    setActiveModule(module);
+    setActiveSubModule(subModule);
+    if (empId) setSelectedEmployeeId(empId);
+    setShowSearchResults(false);
+    setGlobalSearch('');
+  };
+
   return (
     <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm transition-colors duration-200">
       
@@ -75,15 +156,166 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
           <Menu className="h-5 w-5" />
         </button>
 
-        <div className="relative w-full">
+        <div ref={searchRef} className="relative w-full">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-500" />
           <input 
             type="text" 
-            placeholder="Global search (e.g. employee, asset)..." 
+            placeholder="Global search (e.g. employee, asset, module)..." 
             value={globalSearch}
-            onChange={(e) => setGlobalSearch(e.target.value)}
-            className="w-full pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs sm:text-sm bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-700 dark:text-slate-200"
+            onChange={(e) => {
+              setGlobalSearch(e.target.value);
+              setShowSearchResults(true);
+            }}
+            onFocus={() => setShowSearchResults(true)}
+            className="w-full pl-9 pr-8 py-1.5 sm:py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs sm:text-sm bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-700 dark:text-slate-200"
           />
+          {globalSearch && (
+            <button
+              onClick={() => {
+                setGlobalSearch('');
+                setShowSearchResults(false);
+              }}
+              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+
+          {/* Real-time Global Search Dropdown Overlay */}
+          {showSearchResults && query && (
+            <div 
+              className="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[80vh] overflow-y-auto animate-fade-in divide-y divide-slate-100 dark:divide-slate-800"
+            >
+              {totalResultsCount === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400">
+                  No matching results found for "<span className="font-semibold text-slate-700 dark:text-slate-300">{globalSearch}</span>".
+                </div>
+              ) : (
+                <>
+                  {/* Matching Modules */}
+                  {matchingModules.length > 0 && (
+                    <div className="p-2">
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase px-3 py-1 block tracking-wider">
+                        Navigation Modules ({matchingModules.length})
+                      </span>
+                      {matchingModules.map((item, idx) => {
+                        const Icon = item.icon;
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => navigateToResult(item.module, item.sub)}
+                            className="w-full text-left px-3 py-2 rounded-xl hover:bg-primary/10 text-xs flex items-center justify-between group transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                                <Icon className="w-4 h-4" />
+                              </div>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-primary transition-colors">
+                                {item.name}
+                              </span>
+                            </div>
+                            <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary transition-transform group-hover:translate-x-1" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Matching Employees */}
+                  {matchingEmployees.length > 0 && (
+                    <div className="p-2">
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase px-3 py-1 block tracking-wider">
+                        Employees ({matchingEmployees.length})
+                      </span>
+                      {matchingEmployees.map((emp) => (
+                        <button
+                          key={emp.id}
+                          onClick={() => navigateToResult('employees', 'directory', emp.id)}
+                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-primary/10 text-xs flex items-center justify-between group transition-colors"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <img 
+                              src={emp.avatar || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120"} 
+                              alt={emp.name}
+                              className="w-7 h-7 rounded-full object-cover ring-1 ring-primary/20"
+                            />
+                            <div>
+                              <p className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-primary transition-colors">
+                                {emp.name} <span className="text-[10px] text-slate-400 font-normal">({emp.id})</span>
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                {emp.role} • {typeof emp.department === 'string' ? emp.department : ((emp.department as { name?: string })?.name || 'General')}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                            View Profile
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Matching Assets */}
+                  {matchingAssets.length > 0 && (
+                    <div className="p-2">
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase px-3 py-1 block tracking-wider">
+                        Hardware & Assets ({matchingAssets.length})
+                      </span>
+                      {matchingAssets.map((asset) => (
+                        <button
+                          key={asset.id}
+                          onClick={() => navigateToResult('assets', 'register')}
+                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-primary/10 text-xs flex items-center justify-between group transition-colors"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 bg-amber-500/10 text-amber-600 rounded-lg">
+                              <Laptop className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-primary transition-colors">
+                                {asset.name}
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                S/N: {asset.serialNumber} • Status: {asset.status}
+                              </p>
+                            </div>
+                          </div>
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary transition-transform group-hover:translate-x-1" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Matching Claims */}
+                  {matchingClaims.length > 0 && (
+                    <div className="p-2">
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase px-3 py-1 block tracking-wider">
+                        Travel & Reimbursements ({matchingClaims.length})
+                      </span>
+                      {matchingClaims.map((claim) => (
+                        <button
+                          key={claim.id}
+                          onClick={() => navigateToResult('claims', 'my-claims')}
+                          className="w-full text-left px-3 py-2 rounded-xl hover:bg-primary/10 text-xs flex items-center justify-between group transition-colors"
+                        >
+                          <div>
+                            <p className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-primary transition-colors">
+                              {claim.employeeName} - {claim.type} (₹{claim.amount})
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              Status: {claim.status} • ID: {claim.id}
+                            </p>
+                          </div>
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary transition-transform group-hover:translate-x-1" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -151,7 +383,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
         </button>
 
         {/* Notifications */}
-        <div className="relative">
+        <div ref={notifRef} className="relative">
           <button 
             onClick={() => setShowNotifications(!showNotifications)}
             className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative"
@@ -220,7 +452,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
         <div className="h-6 w-px bg-slate-200 dark:bg-slate-800"></div>
 
         {/* User Profile */}
-        <div className="relative">
+        <div ref={profileRef} className="relative">
           <button 
             onClick={() => setShowProfile(!showProfile)}
             className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"

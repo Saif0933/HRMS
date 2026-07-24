@@ -30,7 +30,7 @@ import { useEmployees } from '../api/hook/useEmployee';
 import { useApp } from '../context/AppContext';
 
 export const Attendance: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog, userRole } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, userRole, showConfirm, showAlert } = useApp();
 
   // Simulated active employee switcher
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -294,12 +294,12 @@ export const Attendance: React.FC = () => {
           }
         },
         (error) => {
-          alert(`Failed to get location permission: ${error.message}`);
+          showAlert(`Failed to get location permission: ${error.message}`, "GPS Error", "warning");
         },
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
     } else {
-      alert("Geolocation API is not supported in this browser.");
+      showAlert("Geolocation API is not supported in this browser.", "GPS Unsupported", "danger");
     }
   };
 
@@ -433,16 +433,24 @@ export const Attendance: React.FC = () => {
       sun: days.Sun || 'Week Off',
     }));
 
-    saveRostersMut.mutate({
-      week: rosterWeek,
-      rosters: payloadRosters,
-    }, {
-      onSuccess: () => {
-        addAuditLog("Published Shift Roster", "Attendance Module", `Published weekly roster shifts for ${payloadRosters.length} employees for ${rosterWeek}.`);
-        alert(`Weekly Roster Plan for ${rosterWeek} has been successfully saved to DB and published!`);
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to save roster to backend");
+    showConfirm({
+      title: "Publish Shift Roster",
+      message: `Are you sure you want to save and publish the roster plan for ${payloadRosters.length} employees for ${rosterWeek}?`,
+      type: "confirm",
+      confirmText: "Publish Roster",
+      onConfirm: () => {
+        saveRostersMut.mutate({
+          week: rosterWeek,
+          rosters: payloadRosters,
+        }, {
+          onSuccess: () => {
+            addAuditLog("Published Shift Roster", "Attendance Module", `Published weekly roster shifts for ${payloadRosters.length} employees for ${rosterWeek}.`);
+            showAlert(`Weekly Roster Plan for ${rosterWeek} has been successfully saved to DB and published!`, "Roster Published", "success");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to save roster to backend", "Error", "danger");
+          }
+        });
       }
     });
   };
@@ -462,13 +470,13 @@ export const Attendance: React.FC = () => {
   const verifyWithScreenLock = async (): Promise<boolean> => {
     try {
       if (!window.PublicKeyCredential) {
-        alert("WebAuthn is not supported on this browser.");
+        showAlert("WebAuthn is not supported on this browser.", "Unsupported Feature", "warning");
         return false;
       }
       
       const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
       if (!available) {
-        alert("Desktop Lock Screen verification (Windows Hello) is not available or enabled on this device.");
+        showAlert("Desktop Lock Screen verification (Windows Hello) is not available or enabled on this device.", "Device Lock Error", "warning");
         return false;
       }
 
@@ -498,7 +506,7 @@ export const Attendance: React.FC = () => {
       return !!credential;
     } catch (err: any) {
       console.error("Lock screen verification failed:", err);
-      alert("Verification failed: " + (err.message || "User cancelled lock screen prompt."));
+      showAlert("Verification failed: " + (err.message || "User cancelled lock screen prompt."), "Verification Failed", "danger");
       return false;
     }
   };
@@ -521,19 +529,19 @@ export const Attendance: React.FC = () => {
           "Attendance Module", 
           `Self punch ${punchType} verified via GPS coordinates (Distance: ${activeFenceMatch?.distance || 0}m) and ${verifyMethod === 'selfie' ? 'liveliness face validation' : 'password authentication'}.`
         );
-        alert(`Punch ${punchType} recorded successfully!`);
+        showAlert(`Punch ${punchType} recorded successfully!`, "Punch Verified", "success");
         setIsCameraActive(false);
         setSelfiePreview(null);
       },
       onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to record punch");
+        showAlert(err?.response?.data?.message || err.message || "Failed to record punch", "Punch Error", "danger");
       }
     });
   };
 
   const handlePunchSubmit = async () => {
     if (verifyMethod === 'selfie' && !selfiePreview) {
-      alert('Please capture a selfie before verifying punch.');
+      showAlert('Please capture a selfie before verifying punch.', 'Selfie Required', 'warning');
       return;
     }
     
@@ -563,11 +571,11 @@ export const Attendance: React.FC = () => {
     }, {
       onSuccess: () => {
         addAuditLog("Regularization Request", "Attendance Module", `Applied regularization for date ${regDate}`);
-        alert("Regularization request submitted successfully.");
+        showAlert("Regularization request submitted successfully.", "Request Submitted", "success");
         setRegReason('');
       },
       onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to apply regularization");
+        showAlert(err?.response?.data?.message || err.message || "Failed to apply regularization", "Error", "danger");
       }
     });
   };
@@ -576,7 +584,7 @@ export const Attendance: React.FC = () => {
     updateRegMut.mutate({ id, status: 'Approved' }, {
       onSuccess: () => {
         addAuditLog("Approved Regularization", "Attendance Module", `Approved regularization request for ${name} on ${date}`);
-        alert("Request approved.");
+        showAlert("Regularization request approved.", "Approved", "success");
       }
     });
   };
@@ -585,7 +593,7 @@ export const Attendance: React.FC = () => {
     updateRegMut.mutate({ id, status: 'Rejected' }, {
       onSuccess: () => {
         addAuditLog("Rejected Regularization", "Attendance Module", `Rejected regularization request for ${name} on ${date}`);
-        alert("Request rejected.");
+        showAlert("Regularization request rejected.", "Rejected", "info");
       }
     });
   };
@@ -593,7 +601,7 @@ export const Attendance: React.FC = () => {
   const handleAddGeofence = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFenceName) {
-      alert("Please enter a geofence name");
+      showAlert("Please enter a geofence location name", "Missing Input", "warning");
       return;
     }
     createFenceMut.mutate({
@@ -603,20 +611,27 @@ export const Attendance: React.FC = () => {
       radius: newFenceRadius,
     }, {
       onSuccess: () => {
-        alert("Geofence location registered successfully!");
+        showAlert("Geofence location registered successfully!", "Geofence Registered", "success");
         setNewFenceName('');
       },
       onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to create geofence");
+        showAlert(err?.response?.data?.message || err.message || "Failed to create geofence", "Error", "danger");
       }
     });
   };
 
   const handleDeleteGeofence = (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete geofence "${name}"?`)) return;
-    deleteFenceMut.mutate(id, {
-      onSuccess: () => {
-        alert("Geofence deleted successfully");
+    showConfirm({
+      title: "Delete Geofence Location",
+      message: `Are you sure you want to remove geofence location "${name}"?`,
+      type: "danger",
+      confirmText: "Delete Geofence",
+      onConfirm: () => {
+        deleteFenceMut.mutate(id, {
+          onSuccess: () => {
+            showAlert("Geofence deleted successfully.", "Deleted", "success");
+          }
+        });
       }
     });
   };
@@ -744,7 +759,7 @@ export const Attendance: React.FC = () => {
               </h3>
 
               {/* Punch Toggle */}
-              <div className="flex bg-slate-50 dark:bg-slate-955 rounded-xl overflow-hidden p-1 border border-slate-150 dark:border-slate-800">
+              <div className="flex bg-slate-50 dark:bg-slate-950 rounded-xl overflow-hidden p-1 border border-slate-200 dark:border-slate-800">
                 <button 
                   onClick={() => setPunchType('In')}
                   className={`w-full py-2 rounded-lg font-bold text-xs transition-all ${
@@ -770,7 +785,7 @@ export const Attendance: React.FC = () => {
               {/* Verification Section */}
               <div className="space-y-3">
                 <label className="text-slate-400 font-bold block text-[10px] uppercase tracking-wider">Verification Method</label>
-                <div className="flex bg-slate-100 dark:bg-slate-955 rounded-lg p-0.5 border border-slate-150 dark:border-slate-800 text-[10px]">
+                <div className="flex bg-slate-100 dark:bg-slate-950 rounded-lg p-0.5 border border-slate-200 dark:border-slate-800 text-[10px]">
                   <button 
                     type="button"
                     onClick={() => setVerifyMethod('selfie')}
@@ -796,7 +811,7 @@ export const Attendance: React.FC = () => {
                 </div>
 
                 {verifyMethod === 'selfie' ? (
-                  <div className="border border-slate-250 dark:border-slate-850 rounded-xl p-4 text-center bg-slate-50 dark:bg-slate-955/40 relative overflow-hidden h-44 flex flex-col justify-center items-center">
+                  <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-center bg-slate-50 dark:bg-slate-950/40 relative overflow-hidden h-44 flex flex-col justify-center items-center">
                     {selfiePreview ? (
                       <>
                         <img src={selfiePreview} alt="Selfie Verification" className="absolute inset-0 w-full h-full object-cover" />
@@ -858,7 +873,7 @@ export const Attendance: React.FC = () => {
                       <Lock className="h-6 w-6" />
                     </div>
                     <div>
-                      <span className="font-bold text-slate-850 dark:text-white block text-xs">Verify Desktop Screen Lock</span>
+                      <span className="font-bold text-slate-800 dark:text-white block text-xs">Verify Desktop Screen Lock</span>
                       <span className="text-[10px] text-slate-400 block max-w-[220px] mt-1">Requires your OS lock screen PIN or password authentication to verify GPS punch.</span>
                     </div>
                   </div>
@@ -866,7 +881,7 @@ export const Attendance: React.FC = () => {
               </div>
 
               {/* GPS Simulator Coordinates */}
-              <div className="p-3 border rounded-xl space-y-2.5 bg-slate-50/50 dark:bg-slate-950/50">
+              <div className="p-3 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2.5 bg-slate-50/50 dark:bg-slate-950/50">
                 <span className="font-bold text-[10px] text-slate-400 uppercase block tracking-wider">Simulated Phone GPS Locator</span>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -876,7 +891,7 @@ export const Attendance: React.FC = () => {
                       step="0.000001"
                       value={gpsCoordinates.lat}
                       onChange={(e) => setGpsCoordinates({ ...gpsCoordinates, lat: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 text-slate-750 dark:text-slate-350"
+                      className="w-full px-2 py-1 text-[11px] border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
                     />
                   </div>
                   <div>
@@ -886,14 +901,14 @@ export const Attendance: React.FC = () => {
                       step="0.000001"
                       value={gpsCoordinates.lng}
                       onChange={(e) => setGpsCoordinates({ ...gpsCoordinates, lng: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 text-slate-750 dark:text-slate-350"
+                      className="w-full px-2 py-1 text-[11px] border border-slate-200 dark:border-slate-800 rounded bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
                     />
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={handleAutoDetectLocation}
-                  className="w-full mt-2 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-bold rounded-lg border text-[10px] flex items-center justify-center gap-1.5 transition-all"
+                  className="w-full mt-2 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-lg border border-slate-200 dark:border-slate-700 text-[10px] flex items-center justify-center gap-1.5 transition-all"
                 >
                   <Compass className="h-3.5 w-3.5" />
                   <span>Auto-Detect Current GPS</span>
@@ -901,7 +916,7 @@ export const Attendance: React.FC = () => {
               </div>
 
               {/* Geofence Status */}
-              <div className="p-3.5 border rounded-xl space-y-2 bg-slate-50 dark:bg-slate-955/40">
+              <div className="p-3.5 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2 bg-slate-50 dark:bg-slate-950/40">
                 <div className="flex items-center justify-between font-bold">
                   <span className="text-slate-400 uppercase text-[10px] tracking-wider">Geofence Status</span>
                   {fencesLoading ? (
@@ -978,7 +993,7 @@ export const Attendance: React.FC = () => {
                 </div>
               </div>
 
-              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-inner relative h-[400px] bg-slate-100 dark:bg-slate-955">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-inner relative h-[400px] bg-slate-100 dark:bg-slate-950">
                 <div ref={punchMapRef} className="w-full h-full" />
                 
                 {/* Floating Map Controls */}
@@ -1100,19 +1115,19 @@ export const Attendance: React.FC = () => {
           </div>
 
           {/* Shift Timing Legend */}
-          <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50/70 dark:bg-slate-955/50 rounded-xl border border-slate-150 dark:border-slate-800 text-[11px]">
-            <span className="font-bold text-slate-500 uppercase text-[9px]">Shift Timings:</span>
-            <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/50">General (09:30 - 18:30)</span>
-            <span className="px-2 py-0.5 rounded-md font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/50">Morning (08:00 - 17:00)</span>
-            <span className="px-2 py-0.5 rounded-md font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200/50">Evening (14:00 - 23:00)</span>
-            <span className="px-2 py-0.5 rounded-md font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200/50">Night (22:00 - 07:00)</span>
-            <span className="px-2 py-0.5 rounded-md font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200/50">Week Off</span>
+          <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/60 dark:border-slate-800 text-[11px]">
+            <span className="font-bold text-slate-500 dark:text-slate-400 uppercase text-[9px]">Shift Timings:</span>
+            <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50">General (09:30 - 18:30)</span>
+            <span className="px-2 py-0.5 rounded-md font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/50">Morning (08:00 - 17:00)</span>
+            <span className="px-2 py-0.5 rounded-md font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/50">Evening (14:00 - 23:00)</span>
+            <span className="px-2 py-0.5 rounded-md font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50">Night (22:00 - 07:00)</span>
+            <span className="px-2 py-0.5 rounded-md font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200/50 dark:border-slate-700/50">Week Off</span>
           </div>
 
           {/* Dynamic Employee Roster Table */}
-          <div className="border border-slate-150 dark:border-slate-800 rounded-xl overflow-hidden overflow-x-auto shadow-inner">
+          <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden overflow-x-auto shadow-inner">
             <table className="w-full text-xs text-left min-w-[850px]">
-              <thead className="bg-slate-50 dark:bg-slate-955 text-slate-400 font-bold border-b uppercase text-[10px]">
+              <thead className="bg-slate-50 dark:bg-slate-950 text-slate-400 font-bold border-b border-slate-200 dark:border-slate-800 uppercase text-[10px]">
                 <tr>
                   <th className="p-3 min-w-[200px]">Employee Profile</th>
                   {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
@@ -1120,7 +1135,7 @@ export const Attendance: React.FC = () => {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y text-slate-650 dark:text-slate-350">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-650 dark:text-slate-350">
                 {employeesLoading || rostersLoading ? (
                   <tr>
                     <td colSpan={8} className="p-8 text-center text-slate-400 font-semibold">
@@ -1143,16 +1158,16 @@ export const Attendance: React.FC = () => {
 
                       const getShiftStyle = (val: string) => {
                         switch (val) {
-                          case 'Morning': return 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200';
-                          case 'Evening': return 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200';
-                          case 'Night': return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border-indigo-200';
-                          case 'Week Off': return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-slate-200';
-                          default: return 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200';
+                          case 'Morning': return 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800/60';
+                          case 'Evening': return 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800/60';
+                          case 'Night': return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/60';
+                          case 'Week Off': return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700';
+                          default: return 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800/60';
                         }
                       };
 
                       return (
-                        <tr key={emp.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-850/60 transition-colors">
+                        <tr key={emp.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/60 transition-colors">
                           <td className="p-3">
                             <div className="flex items-center gap-2.5">
                               <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-xs shrink-0">
@@ -1176,11 +1191,11 @@ export const Attendance: React.FC = () => {
                                   onChange={(e) => handleShiftChange(emp.id, day, e.target.value)}
                                   className={`w-full text-[11px] font-extrabold px-2 py-1 rounded-lg border focus:outline-none text-center cursor-pointer transition-all ${getShiftStyle(val)}`}
                                 >
-                                  <option value="General">General</option>
-                                  <option value="Morning">Morning</option>
-                                  <option value="Evening">Evening</option>
-                                  <option value="Night">Night</option>
-                                  <option value="Week Off">Week Off</option>
+                                  <option value="General" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white">General</option>
+                                  <option value="Morning" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white">Morning</option>
+                                  <option value="Evening" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white">Evening</option>
+                                  <option value="Night" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white">Night</option>
+                                  <option value="Week Off" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white">Week Off</option>
                                 </select>
                               </td>
                             );
@@ -1211,7 +1226,7 @@ export const Attendance: React.FC = () => {
                   type="date" 
                   value={regDate} 
                   onChange={(e) => setRegDate(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
+                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
                 />
               </div>
 
@@ -1222,7 +1237,7 @@ export const Attendance: React.FC = () => {
                     type="time" 
                     value={regInTime} 
                     onChange={(e) => setRegInTime(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1231,7 +1246,7 @@ export const Attendance: React.FC = () => {
                     type="time" 
                     value={regOutTime} 
                     onChange={(e) => setRegOutTime(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
                   />
                 </div>
               </div>
@@ -1244,7 +1259,7 @@ export const Attendance: React.FC = () => {
                   placeholder="Explain why punch was missed..." 
                   rows={3} 
                   required 
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
+                  className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
                 />
               </div>
 
@@ -1260,7 +1275,7 @@ export const Attendance: React.FC = () => {
 
           {/* Pending / Historic Requests */}
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 lg:col-span-2">
-            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2">Regularization History Log</h3>
+            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b border-slate-200 dark:border-slate-800 pb-2">Regularization History Log</h3>
             
             {regsLoading ? (
               <div className="py-8 text-center text-slate-400 font-medium">Loading history logs...</div>
@@ -1269,14 +1284,14 @@ export const Attendance: React.FC = () => {
             ) : (
               <div className="space-y-3.5">
                 {regularizeRequests.map((req) => (
-                  <div key={req.id} className="p-4 border border-slate-150 dark:border-slate-850 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-955/40 gap-4 text-xs">
+                  <div key={req.id} className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-950/40 gap-4 text-xs">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-800 dark:text-white">{req.employeeName}</span>
                         <span className="text-[10px] text-slate-450">{req.date}</span>
                       </div>
-                      <p className="text-slate-550 dark:text-slate-450 mt-1">
-                        Expected In: <span className="font-semibold text-slate-750 dark:text-slate-200">{req.timeIn}</span> • Out: <span className="font-semibold text-slate-750 dark:text-slate-200">{req.timeOut}</span>
+                      <p className="text-slate-500 dark:text-slate-400 mt-1">
+                        Expected In: <span className="font-semibold text-slate-700 dark:text-slate-200">{req.timeIn}</span> • Out: <span className="font-semibold text-slate-700 dark:text-slate-200">{req.timeOut}</span>
                       </p>
                       <p className="text-slate-450 mt-0.5">Reason: "{req.reason}"</p>
                     </div>
@@ -1588,7 +1603,7 @@ export const Attendance: React.FC = () => {
                     onChange={(e) => setNewFenceName(e.target.value)}
                     placeholder="e.g. Ranchi Branch Office"
                     required
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-350 font-semibold"
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-semibold"
                   />
                 </div>
 
@@ -1601,7 +1616,7 @@ export const Attendance: React.FC = () => {
                       value={newFenceLat} 
                       onChange={(e) => setNewFenceLat(parseFloat(e.target.value) || 0)}
                       required
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-350"
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1612,7 +1627,7 @@ export const Attendance: React.FC = () => {
                       value={newFenceLng} 
                       onChange={(e) => setNewFenceLng(parseFloat(e.target.value) || 0)}
                       required
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-350"
+                      className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
                     />
                   </div>
                 </div>
@@ -1625,7 +1640,7 @@ export const Attendance: React.FC = () => {
                     onChange={(e) => setNewFenceRadius(parseInt(e.target.value) || 0)}
                     min="5"
                     required
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-955 text-slate-700 dark:text-slate-350"
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200"
                   />
                 </div>
 
@@ -1633,7 +1648,7 @@ export const Attendance: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleAutoDetectLocation}
-                    className="w-1/2 py-2 bg-slate-105 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-bold rounded-xl border flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    className="w-1/2 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Compass className="h-3.5 w-3.5" />
                     <span>Auto GPS</span>
@@ -1652,7 +1667,7 @@ export const Attendance: React.FC = () => {
 
             {/* List */}
             <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
-              <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b border-slate-200 dark:border-slate-800 pb-2 flex items-center justify-between">
                 <span>Active Geofenced Areas</span>
                 <span className="text-[10px] text-slate-400 font-medium">Total: {fencesList.length}</span>
               </h3>
@@ -1676,7 +1691,7 @@ export const Attendance: React.FC = () => {
                           setNewFenceLng(fence.lng);
                           setNewFenceRadius(fence.radius);
                         }}
-                        className="p-3 border border-slate-150 dark:border-slate-850 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-955/30 gap-4 text-xs hover:border-indigo-500 dark:hover:border-indigo-500 transition-all cursor-pointer group"
+                        className="p-3 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-950/40 gap-4 text-xs hover:border-indigo-500 dark:hover:border-indigo-500 transition-all cursor-pointer group"
                         title="Click to auto-fill location details into form"
                       >
                         <div className="space-y-1">

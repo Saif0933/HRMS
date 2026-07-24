@@ -21,7 +21,7 @@ import {
 import { useApp } from '../context/AppContext';
 
 export const Performance: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog, userRole } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, userRole, showConfirm, showAlert } = useApp();
   const isAdminOrManager = userRole === 'Super Admin' || userRole === 'HR Admin' || userRole === 'Manager';
 
   // Active filters and selectors
@@ -82,19 +82,27 @@ export const Performance: React.FC = () => {
     e.preventDefault();
     if (!selectedEmpId) return;
 
-    createGoalMut.mutate({
-      employeeId: selectedEmpId,
-      title: goalTitle,
-      weight: goalWeight,
-      kra: goalKra,
-    }, {
-      onSuccess: () => {
-        addAuditLog("Created Goal", "Performance", `Added new KRA goal: "${goalTitle}" for employee ID ${selectedEmpId}`);
-        setGoalTitle('');
-        alert("New performance goal successfully added.");
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to create goal");
+    showConfirm({
+      title: "Add Performance Goal",
+      message: `Are you sure you want to add goal "${goalTitle}" (${goalWeight} weight) for the selected employee?`,
+      type: "confirm",
+      confirmText: "Add Goal",
+      onConfirm: () => {
+        createGoalMut.mutate({
+          employeeId: selectedEmpId,
+          title: goalTitle,
+          weight: goalWeight,
+          kra: goalKra,
+        }, {
+          onSuccess: () => {
+            addAuditLog("Created Goal", "Performance", `Added new KRA goal: "${goalTitle}" for employee ID ${selectedEmpId}`);
+            setGoalTitle('');
+            showAlert("New performance goal successfully added.", "Goal Added", "success");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to create goal", "Error", "danger");
+          }
+        });
       }
     });
   };
@@ -106,10 +114,10 @@ export const Performance: React.FC = () => {
       progress: nextProgress,
     }, {
       onSuccess: () => {
-        alert("Goal progress updated successfully.");
+        showAlert("Goal progress updated successfully.", "Progress Saved", "success");
       },
       onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to update progress");
+        showAlert(err?.response?.data?.message || err.message || "Failed to update progress", "Error", "danger");
       }
     });
   };
@@ -129,10 +137,10 @@ export const Performance: React.FC = () => {
         addAuditLog("Created Feedback", "Performance", `Submitted ${feedbackRelation} review for employee ID ${selectedEmpId}`);
         setFeedbackReviewer('');
         setFeedbackText('');
-        alert("Feedback review successfully submitted.");
+        showAlert("Feedback review successfully submitted.", "Review Submitted", "success");
       },
       onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to submit feedback");
+        showAlert(err?.response?.data?.message || err.message || "Failed to submit feedback", "Error", "danger");
       }
     });
   };
@@ -141,17 +149,25 @@ export const Performance: React.FC = () => {
     e.preventDefault();
     if (!appraisalEmpId) return;
 
-    saveAppraisalMut.mutate({
-      employeeId: appraisalEmpId,
-      cycle: selectedCycle,
-      rating: appraisalRating,
-    }, {
-      onSuccess: () => {
-        addAuditLog("Save Appraisal", "Performance", `Saved appraisal score for employee ID ${appraisalEmpId} in cycle ${selectedCycle}`);
-        alert("Appraisal score saved. Bell curve updated.");
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to save appraisal");
+    showConfirm({
+      title: "Save Appraisal Rating",
+      message: `Save appraisal rating score of ${appraisalRating} for employee ID ${appraisalEmpId} in cycle ${selectedCycle}?`,
+      type: "confirm",
+      confirmText: "Save Rating",
+      onConfirm: () => {
+        saveAppraisalMut.mutate({
+          employeeId: appraisalEmpId,
+          cycle: selectedCycle,
+          rating: appraisalRating,
+        }, {
+          onSuccess: () => {
+            addAuditLog("Save Appraisal", "Performance", `Saved appraisal score for employee ID ${appraisalEmpId} in cycle ${selectedCycle}`);
+            showAlert("Appraisal score saved. Bell curve updated.", "Appraisal Saved", "success");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to save appraisal", "Error", "danger");
+          }
+        });
       }
     });
   };

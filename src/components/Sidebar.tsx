@@ -5,6 +5,7 @@ import {
   ChevronDown, ChevronRight,
   ClipboardList,
   Clock,
+  CreditCard,
   FileText,
   Heart,
   HelpCircle,
@@ -76,7 +77,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileO
         { id: 'apply', label: 'Apply Leave' },
         { id: 'approvals', label: 'Leave Approvals' },
         { id: 'calendar', label: 'Leave Calendar' },
-        { id: 'policies', label: 'Leave Policies' }
+        { id: 'policies', label: 'Leave Policies' },
+        { id: 'admin', label: 'Leave Configurations' }
       ]
     },
     { 
@@ -144,7 +146,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileO
     { id: 'documents', label: 'Document Vault', icon: FileText },
     { id: 'assets', label: 'Asset Management', icon: Laptop },
     { id: 'letters', label: 'Letter Generator', icon: MailOpen },
-    { id: 'helpdesk', label: 'HR Help Desk', icon: HelpCircle }
+    { id: 'helpdesk', label: 'HR Help Desk', icon: HelpCircle },
+    { id: 'subscription', label: 'Subscription & Plans', icon: CreditCard }
   ];
 
   const handleModuleClick = (item: MenuItem) => {

@@ -18,7 +18,7 @@ import {
 } from '../api/hook/useAssets';
 
 export const Assets: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, showConfirm, showAlert } = useApp();
 
   // Queries & Mutations
   const { data: assetsRes, isLoading: assetsLoading } = useAssets();
@@ -50,20 +50,28 @@ export const Assets: React.FC = () => {
     e.preventDefault();
     if (!newName.trim()) return;
 
-    createAssetMut.mutate({
-      name: newName,
-      category: newCategory,
-      serial: newSerial || `SR-${Math.floor(Math.random() * 1000000)}`,
-    }, {
-      onSuccess: (res: any) => {
-        addAuditLog("Added Asset", "Asset Tracking", `Registered new asset in stock: ${newName}`);
-        alert(`Asset "${newName}" added to inventory stock list!`);
-        setNewName('');
-        setNewSerial('');
-        setActiveSubModule('register');
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to add asset");
+    showConfirm({
+      title: "Add New Asset",
+      message: `Register "${newName}" (${newCategory}) in stock inventory?`,
+      type: "confirm",
+      confirmText: "Register Asset",
+      onConfirm: () => {
+        createAssetMut.mutate({
+          name: newName,
+          category: newCategory,
+          serial: newSerial || `SR-${Math.floor(Math.random() * 1000000)}`,
+        }, {
+          onSuccess: (res: any) => {
+            addAuditLog("Added Asset", "Asset Tracking", `Registered new asset in stock: ${newName}`);
+            showAlert(`Asset "${newName}" added to inventory stock list!`, "Asset Registered", "success");
+            setNewName('');
+            setNewSerial('');
+            setActiveSubModule('register');
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to add asset", "Error", "danger");
+          }
+        });
       }
     });
   };
@@ -72,13 +80,21 @@ export const Assets: React.FC = () => {
     if (!selectedAsset) return;
 
     const empName = employeesList.find(e => e.id === employeeId)?.name || 'Unassigned';
-    assignAssetMut.mutate({ id: selectedAsset.id, employeeId }, {
-      onSuccess: () => {
-        addAuditLog("Asset Assigned", "Asset Tracking", `Assigned asset ${selectedAsset.name} to ${empName}`);
-        alert(`Asset assignment updated successfully.`);
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to assign asset");
+    showConfirm({
+      title: "Reassign Asset",
+      message: `Assign asset ${selectedAsset.name} to ${empName}?`,
+      type: "confirm",
+      confirmText: "Assign Asset",
+      onConfirm: () => {
+        assignAssetMut.mutate({ id: selectedAsset.id, employeeId }, {
+          onSuccess: () => {
+            addAuditLog("Asset Assigned", "Asset Tracking", `Assigned asset ${selectedAsset.name} to ${empName}`);
+            showAlert(`Asset assignment updated successfully.`, "Asset Assigned", "success");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to assign asset", "Error", "danger");
+          }
+        });
       }
     });
   };

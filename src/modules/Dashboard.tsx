@@ -238,20 +238,26 @@ export const Dashboard: React.FC = () => {
         
         {/* Dynamic Analytics & Charts */}
         <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h2 className="text-md font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
-              <Activity className="h-4 w-4 text-primary" />
-              HR Operational Analytics
-            </h2>
-            <div className="flex gap-1.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <h2 className="text-md font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                  <Activity className="h-4 w-4" />
+                </div>
+                HR Operational Analytics
+              </h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">Real-time metrics tracking headcount, attendance, and department trends</p>
+            </div>
+            
+            <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800/80 self-start sm:self-auto">
               {(['attendance', 'departments', 'diversity'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveChartTab(tab)}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     activeChartTab === tab 
-                      ? 'bg-primary text-white' 
-                      : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      ? 'bg-primary text-white shadow-sm shadow-primary/30' 
+                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                   }`}
                 >
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -260,34 +266,83 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-64 mt-4 w-full">
+          <div className="h-68 mt-2 w-full pt-2">
             {activeChartTab === 'attendance' && (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={attendanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="presentGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" fontSize={10} tickLine={false} />
-                  <YAxis fontSize={10} tickLine={false} />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="Present" stroke="#3b82f6" strokeWidth={2.5} fillOpacity={1} fill="url(#presentGrad)" />
-                  <Area type="monotone" dataKey="Late" stroke="#f59e0b" strokeWidth={2} fillOpacity={0} />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="h-full flex flex-col justify-between">
+                <div className="flex items-center justify-end gap-4 text-[11px] font-semibold mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500 shadow-xs shadow-blue-500/50"></span>
+                    <span className="text-slate-600 dark:text-slate-300">Present Rate</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shadow-xs shadow-amber-500/50"></span>
+                    <span className="text-slate-600 dark:text-slate-300">Late Arrivals</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-xs shadow-rose-500/50"></span>
+                    <span className="text-slate-600 dark:text-slate-300">Absent Rate</span>
+                  </div>
+                </div>
+
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={attendanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="presentGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0}/>
+                      </linearGradient>
+                      <linearGradient id="lateGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0}/>
+                      </linearGradient>
+                      <linearGradient id="absentGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#ef4444" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0.0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
+                    <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8' }} />
+                    <YAxis fontSize={11} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8' }} />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        borderColor: 'rgba(51, 65, 85, 0.8)',
+                        borderRadius: '12px',
+                        color: '#fff',
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
+                        backdropFilter: 'blur(8px)',
+                        fontSize: '12px',
+                        padding: '8px 12px'
+                      }}
+                      itemStyle={{ color: '#fff', fontWeight: 600 }}
+                    />
+                    <Area type="monotone" dataKey="Present" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#presentGrad)" />
+                    <Area type="monotone" dataKey="Late" stroke="#f59e0b" strokeWidth={2.5} fillOpacity={1} fill="url(#lateGrad)" />
+                    <Area type="monotone" dataKey="Absent" stroke="#ef4444" strokeWidth={2.5} fillOpacity={1} fill="url(#absentGrad)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             )}
 
             {activeChartTab === 'departments' && (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={deptData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" fontSize={10} tickLine={false} />
-                  <YAxis fontSize={10} tickLine={false} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={deptData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
+                  <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8' }} />
+                  <YAxis fontSize={11} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8' }} />
+                  <Tooltip 
+                    cursor={{ fill: 'rgba(59, 130, 246, 0.05)' }}
+                    contentStyle={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                      borderColor: 'rgba(51, 65, 85, 0.8)',
+                      borderRadius: '12px',
+                      color: '#fff',
+                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
+                      backdropFilter: 'blur(8px)',
+                      fontSize: '12px'
+                    }}
+                  />
+                  <Bar dataKey="value" name="Headcount" fill="#3b82f6" radius={[8, 8, 0, 0]}>
                     {deptData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
@@ -297,8 +352,8 @@ export const Dashboard: React.FC = () => {
             )}
 
             {activeChartTab === 'diversity' && (
-              <div className="flex flex-col md:flex-row items-center justify-around h-full">
-                <div className="h-44 w-44">
+              <div className="flex flex-col md:flex-row items-center justify-around h-full p-2 bg-slate-50/50 dark:bg-slate-950/40 rounded-xl border border-slate-100 dark:border-slate-800/80">
+                <div className="h-48 w-48 relative flex items-center justify-center">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -308,30 +363,54 @@ export const Dashboard: React.FC = () => {
                         ]}
                         cx="50%"
                         cy="50%"
-                        innerRadius={50}
-                        outerRadius={70}
-                        paddingAngle={5}
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={6}
                         dataKey="value"
                       >
-                        <Cell fill="#3b82f6" />
-                        <Cell fill="#ec4899" />
+                        <Cell fill="#3b82f6" stroke="transparent" />
+                        <Cell fill="#ec4899" stroke="transparent" />
                       </Pie>
-                      <Tooltip />
+                      <Tooltip 
+                        contentStyle={{
+                          backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                          borderColor: 'rgba(51, 65, 85, 0.8)',
+                          borderRadius: '12px',
+                          color: '#fff',
+                          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)'
+                        }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
-                </div>
-                <div className="space-y-2.5">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gender Diversity Ratio</p>
-                  <div className="flex items-center gap-2">
-                    <span className="h-3 w-3 bg-blue-500 rounded-full"></span>
-                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                      Male: {dbDashboard?.genderDiversity?.male ?? employees.filter(e => e.gender === 'Male').length} employees
+                  <div className="absolute flex flex-col items-center justify-center text-center pointer-events-none">
+                    <span className="text-xs font-semibold text-slate-400">Total</span>
+                    <span className="text-lg font-bold text-slate-800 dark:text-white">
+                      {(dbDashboard?.genderDiversity?.male ?? employees.filter(e => e.gender === 'Male').length) + 
+                       (dbDashboard?.genderDiversity?.female ?? employees.filter(e => e.gender === 'Female').length)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-3 w-3 bg-pink-500 rounded-full"></span>
-                    <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                      Female: {dbDashboard?.genderDiversity?.female ?? employees.filter(e => e.gender === 'Female').length} employees
+                </div>
+
+                <div className="space-y-3 p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-xs min-w-[200px]">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Gender Inclusion Ratio</p>
+                  
+                  <div className="flex items-center justify-between gap-4 p-2 bg-blue-50/50 dark:bg-blue-950/30 rounded-lg border border-blue-100 dark:border-blue-900/40">
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 bg-blue-500 rounded-full shadow-xs shadow-blue-500/50"></span>
+                      <span className="text-xs text-slate-700 dark:text-slate-200 font-semibold">Male</span>
+                    </div>
+                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                      {dbDashboard?.genderDiversity?.male ?? employees.filter(e => e.gender === 'Male').length} Staff
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 p-2 bg-pink-50/50 dark:bg-pink-950/30 rounded-lg border border-pink-100 dark:border-pink-900/40">
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 bg-pink-500 rounded-full shadow-xs shadow-pink-500/50"></span>
+                      <span className="text-xs text-slate-700 dark:text-slate-200 font-semibold">Female</span>
+                    </div>
+                    <span className="text-xs font-bold text-pink-600 dark:text-pink-400">
+                      {dbDashboard?.genderDiversity?.female ?? employees.filter(e => e.gender === 'Female').length} Staff
                     </span>
                   </div>
                 </div>

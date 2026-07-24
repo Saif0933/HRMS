@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { ConfirmModal, ModalOptions } from '../components/ConfirmModal';
 import {
     Asset,
     ClaimRequest,
@@ -14,7 +15,7 @@ import {
     LeaveRequest
 } from '../mockData';
 
-export type { Asset, ClaimRequest, Employee, FeedPost, HelpTicket, LeaveRequest };
+export type { Asset, ClaimRequest, Employee, FeedPost, HelpTicket, LeaveRequest, ModalOptions };
 
 export type UserRole = 'Super Admin' | 'HR Admin' | 'Manager' | 'Employee';
 
@@ -75,6 +76,10 @@ interface AppContextType {
   setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
   markAllNotificationsRead: () => void;
   clearNotification: (id: string) => void;
+
+  // Confirm / Alert Modal
+  showConfirm: (options: ModalOptions) => void;
+  showAlert: (message: string, title?: string, type?: 'success' | 'warning' | 'danger' | 'info') => void;
 
   // Authentication State
   isAuthenticated: boolean;
@@ -262,6 +267,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
+  // Modal State
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalOptions, setModalOptions] = useState<ModalOptions | null>(null);
+
+  const showConfirm = (options: ModalOptions) => {
+    setModalOptions(options);
+    setModalOpen(true);
+  };
+
+  const showAlert = (message: string, title = 'Notification', type: 'success' | 'warning' | 'danger' | 'info' = 'info') => {
+    setModalOptions({
+      title,
+      message,
+      type,
+      confirmText: 'OK'
+    });
+    setModalOpen(true);
+  };
+
   const logout = () => {
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -291,6 +315,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notifications, setNotifications,
       markAllNotificationsRead,
       clearNotification,
+      showConfirm,
+      showAlert,
       isAuthenticated,
       setIsAuthenticated,
       currentUser,
@@ -298,6 +324,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       logout
     }}>
       {children}
+      <ConfirmModal 
+        isOpen={modalOpen} 
+        options={modalOptions} 
+        onClose={() => setModalOpen(false)} 
+      />
     </AppContext.Provider>
   );
 };

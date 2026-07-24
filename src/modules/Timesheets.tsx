@@ -38,7 +38,7 @@ export interface AssignedTask {
 }
 
 export const Timesheets: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, showConfirm, showAlert } = useApp();
 
   // Simulated active employee switcher
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -161,7 +161,7 @@ export const Timesheets: React.FC = () => {
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) {
-      alert("Please enter a valid task title!");
+      showAlert("Please enter a valid task title!", "Missing Title", "warning");
       return;
     }
     const assignee = employeesList.find(e => e.id === newTaskAssigneeId) || employeesList[0];
@@ -180,7 +180,7 @@ export const Timesheets: React.FC = () => {
 
     setAssignedTasks(prev => [created, ...prev]);
     addAuditLog("Assigned Task to Staff", "Timesheets Module", `Admin created task "${newTaskTitle}" and assigned to ${created.assigneeName}`);
-    alert(`Task "${newTaskTitle}" successfully created and assigned to ${created.assigneeName}!`);
+    showAlert(`Task "${newTaskTitle}" successfully created and assigned to ${created.assigneeName}!`, "Task Assigned", "success");
     setNewTaskTitle('');
     setShowTaskModal(false);
   };
@@ -190,57 +190,88 @@ export const Timesheets: React.FC = () => {
   };
 
   const handleDeleteTask = (taskId: string) => {
-    if (confirm("Are you sure you want to remove this assigned task?")) {
-      setAssignedTasks(prev => prev.filter(t => t.id !== taskId));
-    }
+    showConfirm({
+      title: "Remove Assigned Task",
+      message: "Are you sure you want to remove this assigned task?",
+      type: "danger",
+      confirmText: "Remove Task",
+      onConfirm: () => {
+        setAssignedTasks(prev => prev.filter(t => t.id !== taskId));
+        showAlert("Assigned task removed.", "Removed", "info");
+      }
+    });
   };
 
   const handleSubmitTimesheet = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmpId || !activeEmployee) return;
 
-    submitTimesheetMut.mutate({
-      employeeId: selectedEmpId,
-      project,
-      task,
-      monHours,
-      tueHours,
-      wedHours,
-      thuHours,
-      friHours,
-      week: "Week 27 (Jul 1 - Jul 5)",
-    }, {
-      onSuccess: () => {
-        addAuditLog("Timesheet Submitted", "Timesheets Module", `${activeEmployee.name} submitted timesheet of ${totalComputedHours} hours for project ${project}`);
-        alert(`Timesheet of ${totalComputedHours} hours submitted successfully!`);
-        setActiveSubModule('projects');
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to submit timesheet");
+    showConfirm({
+      title: "Confirm Timesheet Submission",
+      message: `Are you sure you want to submit a timesheet of ${totalComputedHours} hours for project "${project}"?`,
+      type: "confirm",
+      confirmText: "Submit Timesheet",
+      onConfirm: () => {
+        submitTimesheetMut.mutate({
+          employeeId: selectedEmpId,
+          project,
+          task,
+          monHours,
+          tueHours,
+          wedHours,
+          thuHours,
+          friHours,
+          week: "Week 27 (Jul 1 - Jul 5)",
+        }, {
+          onSuccess: () => {
+            addAuditLog("Timesheet Submitted", "Timesheets Module", `${activeEmployee.name} submitted timesheet of ${totalComputedHours} hours for project ${project}`);
+            showAlert(`Timesheet of ${totalComputedHours} hours submitted successfully!`, "Timesheet Submitted", "success");
+            setActiveSubModule('projects');
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to submit timesheet", "Error", "danger");
+          }
+        });
       }
     });
   };
 
   const handleApprove = (id: string, employeeName: string, hours: number) => {
-    updateStatusMut.mutate({ id, status: 'Approved' }, {
-      onSuccess: () => {
-        addAuditLog("Approved Timesheet", "Timesheets Module", `Approved timesheet ${id} of ${hours} hours for ${employeeName}`);
-        alert(`Approved timesheet successfully.`);
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to update timesheet");
+    showConfirm({
+      title: "Approve Timesheet",
+      message: `Are you sure you want to approve timesheet of ${hours} hours for ${employeeName}?`,
+      type: "confirm",
+      confirmText: "Approve Timesheet",
+      onConfirm: () => {
+        updateStatusMut.mutate({ id, status: 'Approved' }, {
+          onSuccess: () => {
+            addAuditLog("Approved Timesheet", "Timesheets Module", `Approved timesheet ${id} of ${hours} hours for ${employeeName}`);
+            showAlert(`Approved timesheet successfully.`, "Approved", "success");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to update timesheet", "Error", "danger");
+          }
+        });
       }
     });
   };
 
   const handleReject = (id: string, employeeName: string, hours: number) => {
-    updateStatusMut.mutate({ id, status: 'Rejected' }, {
-      onSuccess: () => {
-        addAuditLog("Rejected Timesheet", "Timesheets Module", `Rejected timesheet ${id} of ${hours} hours for ${employeeName}`);
-        alert(`Rejected timesheet successfully.`);
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to update timesheet");
+    showConfirm({
+      title: "Reject Timesheet",
+      message: `Are you sure you want to reject timesheet of ${hours} hours for ${employeeName}?`,
+      type: "danger",
+      confirmText: "Reject Timesheet",
+      onConfirm: () => {
+        updateStatusMut.mutate({ id, status: 'Rejected' }, {
+          onSuccess: () => {
+            addAuditLog("Rejected Timesheet", "Timesheets Module", `Rejected timesheet ${id} of ${hours} hours for ${employeeName}`);
+            showAlert(`Rejected timesheet successfully.`, "Rejected", "info");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to update timesheet", "Error", "danger");
+          }
+        });
       }
     });
   };

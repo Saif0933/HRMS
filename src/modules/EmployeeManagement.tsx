@@ -19,7 +19,17 @@ import {
     Trash2,
     TrendingUp,
     Upload,
-    User
+    User,
+    ZoomIn,
+    ZoomOut,
+    RotateCcw,
+    Move,
+    Users,
+    Briefcase,
+    Code,
+    Megaphone,
+    Headphones,
+    UserCircle
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -812,9 +822,12 @@ export const EmployeeManagement: React.FC = () => {
 
   const { data: deptsResponse } = useDepartments();
   const dbDepartments = deptsResponse?.data || [];
-  const departmentOptions = dbDepartments.length > 0 
-    ? dbDepartments.map(d => d.name) 
-    : ['Engineering', 'Design', 'Product', 'Human Resources', 'Finance'];
+  const dbDeptNames = dbDepartments.map(d => d.name);
+  
+  // Department options derived strictly from created departments in DB (or employees matching created DB depts)
+  const departmentOptions = dbDeptNames.length > 0 
+    ? dbDeptNames 
+    : Array.from(new Set(contextEmployees.map(e => typeof e.department === 'string' ? e.department : ((e.department as any)?.name || '')).filter(Boolean)));
 
   // TanStack Query Hooks for Employee Modules
   const { data: employeesResponse, isLoading: employeesLoading } = useEmployees();
@@ -902,7 +915,7 @@ export const EmployeeManagement: React.FC = () => {
       joiningDate: emp.joiningDate ? new Date(emp.joiningDate).toISOString().split('T')[0] : '',
       location: emp.location || 'Mumbai',
       role: override?.role || emp.designation || 'Software Engineer',
-      department: override?.department || emp.department?.name || 'Engineering',
+      department: override?.department || (typeof emp.department === 'string' ? emp.department : (emp.department?.name || 'Engineering')),
       manager: emp.manager?.name || 'Neha Patel',
       basic: override?.basic ?? emp.basic ?? 0,
       hra: emp.hra ?? 0,
@@ -953,6 +966,13 @@ export const EmployeeManagement: React.FC = () => {
 
   // Helper selectors
   const activeEmployee = employees.find(e => e.id === selectedEmployeeId) || employees[0] || contextEmployees[0];
+
+  // Org Chart 360 Zoom & Pan State
+  const [orgChartScale, setOrgChartScale] = useState<number>(1);
+  const [orgChartPosition, setOrgChartPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDraggingOrgChart, setIsDraggingOrgChart] = useState<boolean>(false);
+  const [dragStartOrgChart, setDragStartOrgChart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [selectedOrgDeptFilter, setSelectedOrgDeptFilter] = useState<string>('All');
 
   const { data: salaryResponse } = useEmployeeSalary(activeEmployee?.id);
   const { data: personalResponse } = useEmployeePersonal(activeEmployee?.id);
@@ -3870,69 +3890,262 @@ export const EmployeeManagement: React.FC = () => {
       {/* 4. ORGANIZATION CHART                   */}
       {/* ======================================= */}
       {activeSubModule === 'orgchart' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6 text-center animate-fade-in text-xs">
-          <div>
-            <h2 className="text-md font-bold text-slate-800 dark:text-white">Organization Hierarchy Chart</h2>
-            <p className="text-slate-400 mt-1">Corporate reporting structures from Board executive down to development teams.</p>
-          </div>
+        <div className="bg-slate-50/50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 animate-fade-in text-xs">
+          
+          {/* Top Title Banner */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-100 dark:border-indigo-900/40">
+                <Building2 className="h-6 w-6" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                  Organization Chart
+                </h1>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  Symbosys Technologies Pvt. Ltd. Corporate Reporting Structure
+                </p>
+              </div>
+            </div>
 
-          <div className="overflow-x-auto py-8">
-            <div className="inline-block min-w-full align-middle">
-              <div className="flex flex-col items-center">
-                {/* Level 0: CEO */}
-                <div className="bg-primary border border-primary/20 p-3 rounded-2xl text-center w-52 shadow-md org-node">
-                  <img src="https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=120" alt="CEO" className="h-10 w-10 rounded-full mx-auto object-cover ring-2 ring-white/20 mb-2" />
-                  <p className="font-bold text-white leading-none">Vikram Malhotra</p>
-                  <p className="text-[9px] text-white/70 mt-1 uppercase font-bold">Chief Executive Officer</p>
+            <div className="flex items-center gap-2">
+              {/* Zoom & Reset Controls */}
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-950 p-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                <button
+                  onClick={() => setOrgChartScale(prev => Math.max(0.4, Number((prev - 0.15).toFixed(2))))}
+                  className="p-1.5 hover:bg-white dark:hover:bg-slate-800 rounded-lg text-slate-700 dark:text-slate-300 transition-colors"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+
+                <div className="flex items-center gap-1 px-1">
+                  <input
+                    type="range"
+                    min="0.4"
+                    max="2.2"
+                    step="0.05"
+                    value={orgChartScale}
+                    onChange={(e) => setOrgChartScale(parseFloat(e.target.value))}
+                    className="w-20 sm:w-28 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                  />
+                  <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 w-10 text-right">
+                    {Math.round(orgChartScale * 100)}%
+                  </span>
                 </div>
 
-                <div className="h-6 w-0.5 bg-slate-200 dark:bg-slate-800 my-1"></div>
+                <button
+                  onClick={() => setOrgChartScale(prev => Math.min(2.2, Number((prev + 0.15).toFixed(2))))}
+                  className="p-1.5 hover:bg-white dark:hover:bg-slate-800 rounded-lg text-slate-700 dark:text-slate-300 transition-colors"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
 
-                {/* Level 1: Directors/VP */}
-                <div className="flex gap-16 relative">
-                  {/* Left Column: VP Engineering & Manager */}
-                  <div className="flex flex-col items-center">
-                    <div className="bg-white dark:bg-slate-950 border p-3 rounded-2xl text-center w-48 shadow-sm org-node">
-                      <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120" alt="Mgr" className="h-9 w-9 rounded-full mx-auto object-cover mb-2" />
-                      <p className="font-bold text-slate-800 dark:text-white leading-none">Neha Patel</p>
-                      <p className="text-[9px] text-slate-400 mt-1">Engineering Manager</p>
-                    </div>
-                    
-                    <div className="h-6 w-0.5 bg-slate-200 dark:bg-slate-800 my-1"></div>
+                <button
+                  onClick={() => {
+                    setOrgChartScale(1);
+                    setOrgChartPosition({ x: 0, y: 0 });
+                  }}
+                  className="p-1.5 hover:bg-white dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-indigo-600 transition-colors border-l border-slate-200 dark:border-slate-800 ml-1"
+                  title="Reset View"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
 
-                    {/* Level 2: Engineering Team */}
-                    <div className="flex gap-4">
-                      <div className="bg-slate-50 dark:bg-slate-900 border p-2.5 rounded-xl text-center w-36 shadow-sm org-node org-node-last">
-                        <p className="font-bold text-slate-800 dark:text-white leading-none">Aarav Sharma</p>
-                        <p className="text-[8px] text-slate-400 mt-0.5">Senior Dev</p>
+          {/* Interactive Pan Canvas */}
+          <div
+            className="relative w-full h-[680px] bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden cursor-grab active:cursor-grabbing select-none shadow-inner"
+            onMouseDown={(e) => {
+              setIsDraggingOrgChart(true);
+              setDragStartOrgChart({ x: e.clientX - orgChartPosition.x, y: e.clientY - orgChartPosition.y });
+            }}
+            onMouseMove={(e) => {
+              if (!isDraggingOrgChart) return;
+              setOrgChartPosition({
+                x: e.clientX - dragStartOrgChart.x,
+                y: e.clientY - dragStartOrgChart.y
+              });
+            }}
+            onMouseUp={() => setIsDraggingOrgChart(false)}
+            onMouseLeave={() => setIsDraggingOrgChart(false)}
+            onWheel={(e) => {
+              e.preventDefault();
+              const zoomFactor = e.deltaY < 0 ? 0.08 : -0.08;
+              setOrgChartScale(prev => Math.min(2.2, Math.max(0.4, Number((prev + zoomFactor).toFixed(2)))));
+            }}
+          >
+            {/* Helper Floating Tooltip */}
+            <div className="absolute top-4 left-4 z-20 flex items-center gap-2 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-md px-3.5 py-2 rounded-full border border-slate-200 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400 shadow-sm font-semibold">
+              <Move className="h-4 w-4 text-indigo-600" />
+              <span>360° Interactive Canvas — Drag to Pan | Scroll / Slider to Zoom</span>
+            </div>
+
+            {/* Transform Canvas Wrapper */}
+            <div
+              className="w-full h-full flex items-center justify-center transition-transform duration-75 origin-center"
+              style={{
+                transform: `translate(${orgChartPosition.x}px, ${orgChartPosition.y}px) scale(${orgChartScale})`,
+              }}
+            >
+              <div className="flex flex-col items-center py-10 px-12 min-w-max">
+
+                {/* LEVEL 0: TOP MANAGEMENT ROOT NODE */}
+                <div className="flex flex-col items-center relative">
+                  {(() => {
+                    const ceo = employees.find(e => 
+                      e.role?.toLowerCase().includes('ceo') || 
+                      e.role?.toLowerCase().includes('managing director') ||
+                      e.role?.toLowerCase().includes('chief executive')
+                    ) || { name: 'Rajesh Kumar', role: 'Managing Director' };
+
+                    return (
+                      <div className="w-80 bg-purple-50/90 dark:bg-purple-950/40 border-2 border-purple-200 dark:border-purple-800/80 rounded-2xl p-5 text-center shadow-lg hover:shadow-xl transition-all relative">
+                        <div className="w-12 h-12 rounded-full bg-purple-600 text-white flex items-center justify-center mx-auto mb-2.5 shadow-md font-bold text-lg">
+                          <User className="w-6 h-6" />
+                        </div>
+                        <h3 className="font-extrabold text-purple-700 dark:text-purple-300 text-sm tracking-tight">
+                          Symbosys Technologies Pvt. Ltd.
+                        </h3>
+                        <p className="text-[11px] text-purple-600/80 dark:text-purple-400 font-semibold mt-0.5">
+                          {ceo.role || 'Chief Executive Officer'}
+                        </p>
+                        <p className="text-sm font-black text-slate-900 dark:text-white mt-1">
+                          {ceo.name || 'Vikram Malhotra'}
+                        </p>
                       </div>
-                      <div className="bg-slate-50 dark:bg-slate-900 border p-2.5 rounded-xl text-center w-36 shadow-sm org-node org-node-last">
-                        <p className="font-bold text-slate-800 dark:text-white leading-none">Ananya Roy</p>
-                        <p className="text-[8px] text-slate-400 mt-0.5">Intern UI Dev</p>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
-                  {/* Right Column: HR Director & Team */}
-                  <div className="flex flex-col items-center">
-                    <div className="bg-white dark:bg-slate-950 border p-3 rounded-2xl text-center w-48 shadow-sm org-node">
-                      <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120" alt="Mgr" className="h-9 w-9 rounded-full mx-auto object-cover mb-2" />
-                      <p className="font-bold text-slate-800 dark:text-white leading-none">Shalini Sen</p>
-                      <p className="text-[9px] text-slate-400 mt-1">HR Director</p>
-                    </div>
+                  {/* Vertical Trunk Line down from Root */}
+                  <div className="h-10 w-0.5 bg-slate-400 dark:bg-slate-600"></div>
+                </div>
 
-                    <div className="h-6 w-0.5 bg-slate-200 dark:bg-slate-800 my-1"></div>
+                {/* LEVEL 1 & 2: DEPARTMENTS FLOW (DYNAMIC MAP ACCORDING TO DEPARTMENTS) */}
+                <div className="relative pt-4">
+                  
+                  {/* Department Color & Icon Theme Mapping */}
+                  {(() => {
+                    const deptThemes: Record<string, { bg: string; border: string; text: string; iconBg: string; hoverBorder: string; ring: string; icon: any }> = {
+                      'design': { bg: 'bg-purple-50/70 dark:bg-purple-950/30', border: 'border-purple-200 dark:border-purple-800/60', text: 'text-purple-700 dark:text-purple-400', iconBg: 'bg-purple-600', hoverBorder: 'hover:border-purple-400', ring: 'ring-purple-100', icon: Building2 },
+                      'finance department': { bg: 'bg-emerald-50/70 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-800/60', text: 'text-emerald-700 dark:text-emerald-400', iconBg: 'bg-emerald-600', hoverBorder: 'hover:border-emerald-400', ring: 'ring-emerald-100', icon: Briefcase },
+                      'finance': { bg: 'bg-emerald-50/70 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-800/60', text: 'text-emerald-700 dark:text-emerald-400', iconBg: 'bg-emerald-600', hoverBorder: 'hover:border-emerald-400', ring: 'ring-emerald-100', icon: Briefcase },
+                      'it role': { bg: 'bg-amber-50/70 dark:bg-amber-950/30', border: 'border-amber-200 dark:border-amber-800/60', text: 'text-amber-700 dark:text-amber-400', iconBg: 'bg-amber-500', hoverBorder: 'hover:border-amber-400', ring: 'ring-amber-100', icon: Code },
+                      'it': { bg: 'bg-amber-50/70 dark:bg-amber-950/30', border: 'border-amber-200 dark:border-amber-800/60', text: 'text-amber-700 dark:text-amber-400', iconBg: 'bg-amber-500', hoverBorder: 'hover:border-amber-400', ring: 'ring-amber-100', icon: Code },
+                      'sell department': { bg: 'bg-indigo-50/70 dark:bg-indigo-950/30', border: 'border-indigo-200 dark:border-indigo-800/60', text: 'text-indigo-700 dark:text-indigo-400', iconBg: 'bg-indigo-600', hoverBorder: 'hover:border-indigo-400', ring: 'ring-indigo-100', icon: Briefcase },
+                      'human resources': { bg: 'bg-blue-50/70 dark:bg-blue-950/30', border: 'border-blue-200 dark:border-blue-800/60', text: 'text-blue-700 dark:text-blue-400', iconBg: 'bg-blue-600', hoverBorder: 'hover:border-blue-400', ring: 'ring-blue-100', icon: Users },
+                      'marketing': { bg: 'bg-rose-50/70 dark:bg-rose-950/30', border: 'border-rose-200 dark:border-rose-800/60', text: 'text-rose-700 dark:text-rose-400', iconBg: 'bg-rose-500', hoverBorder: 'hover:border-rose-400', ring: 'ring-rose-100', icon: Megaphone },
+                      'customer support': { bg: 'bg-teal-50/70 dark:bg-teal-950/30', border: 'border-teal-200 dark:border-teal-800/60', text: 'text-teal-700 dark:text-teal-400', iconBg: 'bg-teal-600', hoverBorder: 'hover:border-teal-400', ring: 'ring-teal-100', icon: Headphones }
+                    };
 
-                    <div className="bg-slate-50 dark:bg-slate-900 border p-2.5 rounded-xl text-center w-36 shadow-sm org-node org-node-last">
-                      <p className="font-bold text-slate-800 dark:text-white leading-none">Karan Johar</p>
-                      <p className="text-[8px] text-slate-400 mt-0.5">HR Generalist</p>
-                    </div>
-                  </div>
+                    const defaultTheme = { bg: 'bg-slate-50/70 dark:bg-slate-950/30', border: 'border-slate-200 dark:border-slate-800', text: 'text-slate-700 dark:text-slate-300', iconBg: 'bg-slate-700', hoverBorder: 'hover:border-primary', ring: 'ring-slate-100', icon: Building2 };
+
+                    const activeDeptList = selectedOrgDeptFilter === 'All' 
+                      ? departmentOptions 
+                      : departmentOptions.filter(d => d.trim().toLowerCase() === selectedOrgDeptFilter.trim().toLowerCase());
+
+                    return (
+                      <>
+                        {/* Top Horizontal Connecting Line */}
+                        {activeDeptList.length > 1 && (
+                          <div className="absolute top-0 left-[120px] right-[120px] h-0.5 bg-slate-400 dark:bg-slate-600"></div>
+                        )}
+
+                        <div className="flex gap-8 items-start">
+                          {activeDeptList.map((deptName) => {
+                            const normalizedDeptKey = deptName.trim().toLowerCase();
+                            const theme = deptThemes[normalizedDeptKey] || defaultTheme;
+                            const IconComp = theme.icon;
+
+                            // Live department object from backend/state to find manager/head
+                            const deptObj = dbDepartments.find(d => d.name.trim().toLowerCase() === normalizedDeptKey);
+
+                            // Live employees matching department
+                            const liveDeptMembers = employees.filter(e => {
+                              const empDept = typeof e.department === 'string' ? e.department : ((e.department as any)?.name || '');
+                              return empDept.trim().toLowerCase() === normalizedDeptKey && e.status !== 'Resigned' && e.status !== 'Terminated';
+                            });
+
+                            // Head employee identification (1. Dept manager if assigned, 2. Manager/Lead/Director role, 3. First member)
+                            const deptHead = deptObj?.manager 
+                              ? { name: deptObj.manager.name, role: `${deptName} Head` }
+                              : liveDeptMembers.find(e => 
+                                  e.role?.toLowerCase().includes('manager') || 
+                                  e.role?.toLowerCase().includes('head') || 
+                                  e.role?.toLowerCase().includes('director') ||
+                                  e.role?.toLowerCase().includes('lead')
+                                ) || (liveDeptMembers[0] ? { name: liveDeptMembers[0].name, role: liveDeptMembers[0].role } : { name: 'Position Open', role: 'Department Head' });
+
+                            // Remaining team members
+                            const teamMembers = liveDeptMembers.filter(e => e.name !== deptHead.name);
+
+                            return (
+                              <div key={deptName} className="flex flex-col items-center relative w-60">
+                                {/* Top Arrow Connector */}
+                                <div className="h-4 w-0.5 bg-slate-400 dark:bg-slate-600 -mt-4 mb-1"></div>
+                                
+                                {/* Dept Head Card */}
+                                <div className={`w-full ${theme.bg} border-2 ${theme.border} rounded-2xl p-4 text-center shadow-md mb-4`}>
+                                  <div className={`w-9 h-9 rounded-full ${theme.iconBg} text-white flex items-center justify-center mx-auto mb-2 shadow-sm`}>
+                                    <IconComp className="w-5 h-5" />
+                                  </div>
+                                  <h4 className={`font-extrabold ${theme.text} text-sm`}>{deptName}</h4>
+                                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Department Head</p>
+                                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5">{deptHead.name}</p>
+                                </div>
+
+                                {/* Tree Spine Line */}
+                                {teamMembers.length > 0 && (
+                                  <div className="absolute top-[165px] left-3 bottom-4 w-0.5 bg-slate-300 dark:bg-slate-700"></div>
+                                )}
+
+                                {/* Employee Nodes */}
+                                <div className="flex flex-col gap-3.5 w-full pl-6">
+                                  {teamMembers.length === 0 ? (
+                                    <div className="p-3 text-center border border-dashed border-slate-300 dark:border-slate-800 rounded-xl text-slate-400 text-[10px]">
+                                      No additional team members assigned
+                                    </div>
+                                  ) : (
+                                    teamMembers.map((member) => (
+                                      <div 
+                                        key={member.id}
+                                        onClick={() => { 
+                                          setSelectedEmployeeId(member.id); 
+                                          setActiveSubModule('profile'); 
+                                        }}
+                                        className={`bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-750 p-2.5 rounded-xl flex items-center gap-3 shadow-sm ${theme.hoverBorder} transition-all relative cursor-pointer`}
+                                      >
+                                        <div className="absolute -left-3.5 top-1/2 w-3.5 h-0.5 bg-slate-300 dark:bg-slate-700"></div>
+                                        <img 
+                                          src={member.avatar} 
+                                          alt={member.name} 
+                                          className={`w-9 h-9 rounded-full object-cover ring-2 ${theme.ring} shrink-0`} 
+                                        />
+                                        <div className="text-left overflow-hidden">
+                                          <p className="font-bold text-slate-900 dark:text-white text-xs leading-none">{member.name}</p>
+                                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-medium">{member.role}</p>
+                                        </div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    );
+                  })()}
+
                 </div>
 
               </div>
             </div>
           </div>
+
         </div>
       )}
 

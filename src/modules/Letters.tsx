@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Download,
   FileSignature,
@@ -8,6 +8,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useEmployees } from '../api/hook/useEmployee';
 import {
   useIssuedLetters,
   useIssueLetter,
@@ -15,7 +16,11 @@ import {
 } from '../api/hook/useLetters';
 
 export const Letters: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, showConfirm, showAlert } = useApp();
+
+  // Fetch employees list from backend DB
+  const { data: dbEmployeesRes, isLoading: employeesLoading } = useEmployees();
+  const employeesList = dbEmployeesRes?.data || [];
 
   // Queries & Mutations
   const { data: lettersRes, isLoading: logsLoading } = useIssuedLetters();
@@ -32,29 +37,59 @@ export const Letters: React.FC = () => {
   const [salaryCtc, setSalaryCtc] = useState('₹8,50,000 per annum');
   const [warningReason, setWarningReason] = useState('Repeated late entries beyond grace period limits');
 
+  // Configurator states
+  const [companyName, setCompanyName] = useState('FactoCorp Technologies Pvt Ltd');
+  const [companyAddress, setCompanyAddress] = useState('Bandra Kurla Complex, Mumbai | contact@factocorp.com');
+  const [selectedHrSignId, setSelectedHrSignId] = useState('');
+
+  // Automatically select first employee/HR when loaded if not selected
+  useEffect(() => {
+    if (employeesList.length > 0 && !selectedHrSignId) {
+      setSelectedHrSignId(employeesList[0].id);
+    }
+  }, [employeesList, selectedHrSignId]);
+
+  // Dynamic selected HR object derived from DB employees with fallback
+  const selectedEmp = employeesList.find(emp => emp.id === selectedHrSignId);
+  const activeHrSign = selectedEmp ? {
+    name: selectedEmp.name,
+    title: selectedEmp.designation || selectedEmp.role || 'HR Representative'
+  } : {
+    name: 'Neha Patel',
+    title: 'HR Director'
+  };
+
   const handleIssueLetter = (e: React.FormEvent) => {
     e.preventDefault();
     
-    issueLetterMut.mutate({
-      templateType: selectedTemplate,
-      recipientName,
-      recipientRole,
-      joiningDate: selectedTemplate === 'offer' ? joiningDate : null,
-      salaryCtc: selectedTemplate === 'offer' ? salaryCtc : null,
-      warningReason: selectedTemplate === 'warning' ? warningReason : null,
-    }, {
-      onSuccess: () => {
-        addAuditLog(
-          "Issued Corporate Letter", 
-          "Letters Center", 
-          `Generated and dispatched ${selectedTemplate} letter to ${recipientName} (${recipientRole})`
-        );
-        alert(`Letter successfully generated and logged in the database!`);
-        // Navigate to the logs tab
-        setActiveSubModule('issued-log');
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to generate letter");
+    showConfirm({
+      title: "Confirm Letter Issuance",
+      message: `Are you sure you want to generate and issue the ${selectedTemplate.toUpperCase()} letter for ${recipientName} (${recipientRole})?`,
+      type: "confirm",
+      confirmText: "Issue Letter",
+      onConfirm: () => {
+        issueLetterMut.mutate({
+          templateType: selectedTemplate,
+          recipientName,
+          recipientRole,
+          joiningDate: selectedTemplate === 'offer' ? joiningDate : null,
+          salaryCtc: selectedTemplate === 'offer' ? salaryCtc : null,
+          warningReason: selectedTemplate === 'warning' ? warningReason : null,
+        }, {
+          onSuccess: () => {
+            addAuditLog(
+              "Issued Corporate Letter", 
+              "Letters Center", 
+              `Generated and dispatched ${selectedTemplate} letter to ${recipientName} (${recipientRole}) for ${companyName}`
+            );
+            showAlert(`Letter successfully generated and logged in the database!`, "Letter Issued", "success");
+            // Navigate to the logs tab
+            setActiveSubModule('issued-log');
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to generate letter", "Error", "danger");
+          }
+        });
       }
     });
   };
@@ -110,6 +145,49 @@ export const Letters: React.FC = () => {
             </div>
 
             <form onSubmit={handleIssueLetter} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-slate-400 font-medium">Company Name</label>
+                <input 
+                  type="text" 
+                  value={companyName} 
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="e.g. FactoCorp Technologies Pvt Ltd"
+                  required
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350 font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-400 font-medium">Company Address</label>
+                <input 
+                  type="text" 
+                  value={companyAddress} 
+                  onChange={(e) => setCompanyAddress(e.target.value)}
+                  placeholder="e.g. Bandra Kurla Complex, Mumbai | contact@factocorp.com"
+                  required
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-400 font-medium">Select HR Signatory</label>
+                <select 
+                  value={selectedHrSignId} 
+                  onChange={(e) => setSelectedHrSignId(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-350 focus:outline-none"
+                >
+                  {employeesLoading ? (
+                    <option value="">Loading signatories...</option>
+                  ) : (
+                    employeesList.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.designation || emp.role || 'HR Staff'})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
               <div className="space-y-1">
                 <label className="text-slate-400 font-medium">Recipient Full Name</label>
                 <input 
@@ -180,7 +258,7 @@ export const Letters: React.FC = () => {
             <div className="flex justify-between items-center border-b pb-3">
               <span className="text-slate-400 font-bold uppercase text-[10px]">Real-Time Document Preview</span>
               <button 
-                onClick={() => alert("Downloading letter PDF...")}
+                onClick={() => showAlert("Downloading corporate letter PDF...", "Download Started", "info")}
                 className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-355 rounded-lg hover:bg-primary hover:text-white transition-colors"
               >
                 <Download className="h-3.5 w-3.5" />
@@ -191,22 +269,22 @@ export const Letters: React.FC = () => {
             {/* Letter layout */}
             <div className="p-6 border border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 font-serif leading-relaxed text-slate-850 dark:text-slate-200">
               <div className="text-center border-b pb-4 mb-6">
-                <h2 className="text-md font-extrabold uppercase tracking-wide text-primary">FactoCorp Technologies Pvt Ltd</h2>
-                <p className="text-[9px] font-sans text-slate-400 italic">Bandra Kurla Complex, Mumbai | contact@factocorp.com</p>
+                <h2 className="text-md font-extrabold uppercase tracking-wide text-primary">{companyName || 'Corporate Entity'}</h2>
+                <p className="text-[9px] font-sans text-slate-400 italic">{companyAddress || 'Corporate Office Address'}</p>
               </div>
 
               {selectedTemplate === 'offer' && (
                 <div className="space-y-4">
                   <div className="text-right text-[10px] font-sans text-slate-450 mb-4">Date: {new Date().toISOString().split('T')[0]}</div>
                   <p className="font-bold">Dear {recipientName},</p>
-                  <p>We are pleased to offer you the position of <span className="font-bold">{recipientRole}</span> with our development organization at FactoCorp Technologies. Your target joining date is set for <span className="font-bold">{joiningDate}</span>.</p>
+                  <p>We are pleased to offer you the position of <span className="font-bold">{recipientRole}</span> with our development organization at {companyName}. Your target joining date is set for <span className="font-bold">{joiningDate}</span>.</p>
                   <p>Your annual cost-to-company (CTC) remuneration package is structured at <span className="font-bold">{salaryCtc}</span>, inclusive of allowances and performance variables.</p>
                   <p>Kindly acknowledge this letter as a confirmation of acceptance. We look forward to welcoming you onboard.</p>
                   
                   <div className="pt-8 flex justify-between font-sans text-[10px] text-slate-400 mt-6">
                     <div>
-                      <p className="font-bold text-slate-700 dark:text-slate-200">Neha Patel</p>
-                      <p>HR Director, FactoCorp</p>
+                      <p className="font-bold text-slate-700 dark:text-slate-200">{activeHrSign.name}</p>
+                      <p>{activeHrSign.title}, {companyName}</p>
                     </div>
                     <div className="text-right">
                       <FileSignature className="h-6 w-6 text-slate-300 ml-auto mb-1" />
@@ -226,8 +304,8 @@ export const Letters: React.FC = () => {
                   
                   <div className="pt-8 flex justify-between font-sans text-[10px] text-slate-400 mt-6">
                     <div>
-                      <p className="font-bold text-slate-700 dark:text-slate-200">Shalini Sen</p>
-                      <p>Compliance Officer, FactoCorp</p>
+                      <p className="font-bold text-slate-700 dark:text-slate-200">{activeHrSign.name}</p>
+                      <p>{activeHrSign.title}, {companyName}</p>
                     </div>
                   </div>
                 </div>
@@ -237,13 +315,13 @@ export const Letters: React.FC = () => {
                 <div className="space-y-4">
                   <div className="text-right text-[10px] font-sans text-slate-455 mb-4">Date: {new Date().toISOString().split('T')[0]}</div>
                   <h3 className="text-center font-bold uppercase border-y py-1.5 text-xs tracking-wider">Relieving & Experience Certificate</h3>
-                  <p className="pt-4">This is to certify that <span className="font-bold">{recipientName}</span> has worked with FactoCorp Technologies as a <span className="font-bold">{recipientRole}</span> from January 2023 to June 2026.</p>
+                  <p className="pt-4">This is to certify that <span className="font-bold">{recipientName}</span> has worked with {companyName} as a <span className="font-bold">{recipientRole}</span> from January 2023 to June 2026.</p>
                   <p>During their tenure with us, their conduct has been found to be exemplary and professional. We wish them all success in their future career endeavors.</p>
                   
                   <div className="pt-8 flex justify-between font-sans text-[10px] text-slate-400 mt-6">
                     <div>
-                      <p className="font-bold text-slate-700 dark:text-slate-200">Neha Patel</p>
-                      <p>HR Manager, FactoCorp</p>
+                      <p className="font-bold text-slate-700 dark:text-slate-200">{activeHrSign.name}</p>
+                      <p>{activeHrSign.title}, {companyName}</p>
                     </div>
                   </div>
                 </div>
@@ -290,7 +368,7 @@ export const Letters: React.FC = () => {
                   </div>
 
                   <button 
-                    onClick={() => alert(`Re-downloading PDF for ${letter.recipientName}...`)}
+                    onClick={() => showAlert(`Re-downloading PDF for ${letter.recipientName}...`, "Downloading Document", "info")}
                     className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg hover:scale-105 transition-all text-slate-500"
                     title="Download Letter"
                   >

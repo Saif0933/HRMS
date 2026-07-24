@@ -12,7 +12,7 @@ import {
 } from '../api/hook/useHelpdesk';
 
 export const HelpDesk: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog, userRole } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, userRole, showConfirm, showAlert } = useApp();
 
   // Simulated active employee switcher
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -47,34 +47,50 @@ export const HelpDesk: React.FC = () => {
     e.preventDefault();
     if (!tktSubject.trim() || !selectedEmpId) return;
 
-    createTicketMut.mutate({
-      employeeId: selectedEmpId,
-      subject: tktSubject,
-      description: tktDesc,
-      category: tktCategory,
-      priority: tktPriority,
-    }, {
-      onSuccess: (res: any) => {
-        addAuditLog("Logged Support Ticket", "Help Desk Center", `Raised support ticket: "${tktSubject}"`);
-        alert(`Support ticket created successfully! IT/HR team has been notified.`);
-        setTktSubject('');
-        setTktDesc('');
-        setActiveSubModule('tickets');
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to create support ticket");
+    showConfirm({
+      title: "Raise Support Ticket",
+      message: `Are you sure you want to raise a ${tktCategory} support ticket for "${tktSubject}"?`,
+      type: "confirm",
+      confirmText: "Submit Ticket",
+      onConfirm: () => {
+        createTicketMut.mutate({
+          employeeId: selectedEmpId,
+          subject: tktSubject,
+          description: tktDesc,
+          category: tktCategory,
+          priority: tktPriority,
+        }, {
+          onSuccess: (res: any) => {
+            addAuditLog("Logged Support Ticket", "Help Desk Center", `Raised support ticket: "${tktSubject}"`);
+            showAlert(`Support ticket created successfully! IT/HR team has been notified.`, "Ticket Logged", "success");
+            setTktSubject('');
+            setTktDesc('');
+            setActiveSubModule('tickets');
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to create support ticket", "Error", "danger");
+          }
+        });
       }
     });
   };
 
   const handleResolveTicket = (id: string, subject: string) => {
-    resolveTicketMut.mutate(id, {
-      onSuccess: () => {
-        addAuditLog("Resolved Support Ticket", "Help Desk Center", `Resolved ticket ${id}: "${subject}"`);
-        alert(`Ticket ${id} resolved! Notification dispatched to employee.`);
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to resolve ticket");
+    showConfirm({
+      title: "Resolve Support Ticket",
+      message: `Are you sure you want to mark ticket ${id} ("${subject}") as resolved?`,
+      type: "confirm",
+      confirmText: "Mark Resolved",
+      onConfirm: () => {
+        resolveTicketMut.mutate(id, {
+          onSuccess: () => {
+            addAuditLog("Resolved Support Ticket", "Help Desk Center", `Resolved ticket ${id}: "${subject}"`);
+            showAlert(`Ticket ${id} resolved! Notification dispatched to employee.`, "Ticket Resolved", "success");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to resolve ticket", "Error", "danger");
+          }
+        });
       }
     });
   };
@@ -147,10 +163,10 @@ export const HelpDesk: React.FC = () => {
       {/* 1. TICKETS LIST & SLA                   */}
       {/* ======================================= */}
       {activeSubModule === 'tickets' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 animate-fade-in text-xs">
-          <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex items-center justify-between">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 animate-fade-in text-xs">
+          <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b border-slate-200 dark:border-slate-800 pb-2 flex items-center justify-between">
             <span>Help Desk Tickets Directory</span>
-            <span className="bg-amber-100 dark:bg-amber-955 text-amber-850 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold">
+            <span className="bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-bold">
               {ticketsList.filter(t => t.status !== 'Resolved').length} Open
             </span>
           </h3>
@@ -162,11 +178,11 @@ export const HelpDesk: React.FC = () => {
           ) : (
             <div className="space-y-3.5">
               {ticketsList.map((t) => (
-                <div key={t.id} className="p-4 border border-slate-150 dark:border-slate-850 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-955/40 gap-4">
+                <div key={t.id} className="p-4 border border-slate-200/80 dark:border-slate-800 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-950/60 gap-4">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-slate-850 dark:text-white">{t.subject}</span>
-                      <span className="bg-slate-200 dark:bg-slate-800 px-2.5 py-0.5 rounded-full text-[9px] font-bold">{t.id.slice(0, 8)}</span>
+                      <span className="bg-slate-200 dark:bg-slate-800 px-2.5 py-0.5 rounded-full text-[9px] font-bold dark:text-slate-300">{t.id.slice(0, 8)}</span>
                     </div>
                     <p className="text-slate-550 dark:text-slate-400 mt-1">
                       Raised by: <span className="font-semibold text-slate-700 dark:text-slate-300">{t.employeeName}</span> • Category: <span className="font-semibold text-slate-700 dark:text-slate-300">{t.category}</span> • Date: {t.date}
@@ -174,7 +190,7 @@ export const HelpDesk: React.FC = () => {
                     
                     {/* SLA Tracker */}
                     {t.status !== 'Resolved' && (
-                      <div className="flex items-center gap-1.5 mt-2 text-rose-500 font-bold text-[10px]">
+                      <div className="flex items-center gap-1.5 mt-2 text-rose-500 dark:text-rose-400 font-bold text-[10px]">
                         <Clock className="h-3.5 w-3.5" />
                         <span>SLA Time Left: {t.slaHoursLeft} Hours</span>
                       </div>
@@ -191,7 +207,7 @@ export const HelpDesk: React.FC = () => {
                     </span>
 
                     <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                      t.status === 'Resolved' ? 'bg-green-150 text-green-800 dark:bg-green-950/60 dark:text-green-300' : 'bg-amber-150 text-amber-800 dark:bg-amber-955/60 dark:text-amber-350 animate-pulse'
+                      t.status === 'Resolved' ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse'
                     }`}>
                       {t.status}
                     </span>

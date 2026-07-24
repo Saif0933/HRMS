@@ -17,7 +17,7 @@ import {
 } from '../api/hook/useTravelClaims';
 
 export const TravelClaims: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, showConfirm, showAlert } = useApp();
 
   // Active employee context (for simulation)
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -71,52 +71,76 @@ export const TravelClaims: React.FC = () => {
     e.preventDefault();
     if (!selectedEmpId || !activeEmployee) return;
 
-    applyClaimMut.mutate({
-      employeeId: selectedEmpId,
-      type: claimType,
-      amount,
-      date,
-      reason,
-      receiptUrl: receiptFile ? receiptFile.name : null,
-    }, {
-      onSuccess: (res: any) => {
-        addAuditLog("Applied Claim", "Travel & Claims", `${activeEmployee.name} submitted expense claim of ₹${amount} for ${reason}`);
-        alert(`Expense claim submitted successfully!`);
-        
-        setReason('');
-        setAmount(1500);
-        setReceiptFile(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-        setActiveSubModule('my-claims');
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to submit claim");
+    showConfirm({
+      title: "Confirm Travel Claim",
+      message: `Are you sure you want to submit a ${claimType} claim of ₹${amount} for "${reason}"?`,
+      type: "confirm",
+      confirmText: "Submit Claim",
+      onConfirm: () => {
+        applyClaimMut.mutate({
+          employeeId: selectedEmpId,
+          type: claimType,
+          amount,
+          date,
+          reason,
+          receiptUrl: receiptFile ? receiptFile.name : null,
+        }, {
+          onSuccess: (res: any) => {
+            addAuditLog("Applied Claim", "Travel & Claims", `${activeEmployee.name} submitted expense claim of ₹${amount} for ${reason}`);
+            showAlert(`Expense claim submitted successfully!`, "Claim Submitted", "success");
+            
+            setReason('');
+            setAmount(1500);
+            setReceiptFile(null);
+            if (fileInputRef.current) {
+              fileInputRef.current.value = '';
+            }
+            setActiveSubModule('my-claims');
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to submit claim", "Claim Error", "danger");
+          }
+        });
       }
     });
   };
 
   const handleApprove = (id: string, name: string, amt: number) => {
-    updateStatusMut.mutate({ id, status: 'Approved' }, {
-      onSuccess: () => {
-        addAuditLog("Approved Claim", "Travel & Claims", `Approved expense claim ${id} of ₹${amt} for ${name}`);
-        alert(`Approved claim for ₹${amt}.`);
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to update claim status");
+    showConfirm({
+      title: "Approve Expense Claim",
+      message: `Are you sure you want to approve expense claim of ₹${amt} for ${name}?`,
+      type: "confirm",
+      confirmText: "Approve Claim",
+      onConfirm: () => {
+        updateStatusMut.mutate({ id, status: 'Approved' }, {
+          onSuccess: () => {
+            addAuditLog("Approved Claim", "Travel & Claims", `Approved expense claim ${id} of ₹${amt} for ${name}`);
+            showAlert(`Approved claim for ₹${amt}.`, "Claim Approved", "success");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to update claim status", "Error", "danger");
+          }
+        });
       }
     });
   };
 
   const handleReject = (id: string, name: string, amt: number) => {
-    updateStatusMut.mutate({ id, status: 'Rejected' }, {
-      onSuccess: () => {
-        addAuditLog("Rejected Claim", "Travel & Claims", `Rejected expense claim ${id} of ₹${amt} for ${name}`);
-        alert(`Rejected claim for ₹${amt}.`);
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to update claim status");
+    showConfirm({
+      title: "Reject Expense Claim",
+      message: `Are you sure you want to reject expense claim of ₹${amt} for ${name}?`,
+      type: "danger",
+      confirmText: "Reject Claim",
+      onConfirm: () => {
+        updateStatusMut.mutate({ id, status: 'Rejected' }, {
+          onSuccess: () => {
+            addAuditLog("Rejected Claim", "Travel & Claims", `Rejected expense claim ${id} of ₹${amt} for ${name}`);
+            showAlert(`Rejected claim for ₹${amt}.`, "Claim Rejected", "info");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to update claim status", "Error", "danger");
+          }
+        });
       }
     });
   };

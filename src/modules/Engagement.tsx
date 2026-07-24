@@ -27,7 +27,7 @@ import {
 } from '../api/hook/useEngagement';
 
 export const Engagement: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, showConfirm, showAlert } = useApp();
 
   // Active employee context (for simulation)
   const [selectedEmpId, setSelectedEmpId] = useState('');
@@ -82,19 +82,27 @@ export const Engagement: React.FC = () => {
     e.preventDefault();
     if (!newPostText.trim() || !activeEmployee) return;
 
-    createPostMut.mutate({
-      authorName: activeEmployee.name,
-      authorRole: activeEmployee.designation || 'Staff Member',
-      authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop',
-      content: newPostText,
-    }, {
-      onSuccess: () => {
-        addAuditLog("Posted Announcement", "Engagement Module", `${activeEmployee.name} shared an update on the feed.`);
-        setNewPostText('');
-        alert("Company update posted successfully.");
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to post update");
+    showConfirm({
+      title: "Share Update",
+      message: "Post this company update to the engagement social feed?",
+      type: "confirm",
+      confirmText: "Post Update",
+      onConfirm: () => {
+        createPostMut.mutate({
+          authorName: activeEmployee.name,
+          authorRole: activeEmployee.designation || 'Staff Member',
+          authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop',
+          content: newPostText,
+        }, {
+          onSuccess: () => {
+            addAuditLog("Posted Announcement", "Engagement Module", `${activeEmployee.name} shared an update on the feed.`);
+            setNewPostText('');
+            showAlert("Company update posted successfully.", "Update Posted", "success");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to post update", "Error", "danger");
+          }
+        });
       }
     });
   };
@@ -123,7 +131,7 @@ export const Engagement: React.FC = () => {
         setCommentTextMap(prev => ({ ...prev, [postId]: '' }));
       },
       onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to add comment");
+        showAlert(err?.response?.data?.message || err.message || "Failed to add comment", "Error", "danger");
       }
     });
   };
@@ -139,10 +147,10 @@ export const Engagement: React.FC = () => {
     }, {
       onSuccess: () => {
         addAuditLog("Logged Mood", "Engagement Module", `${activeEmployee?.name} logged mood check-in: ${moodValue}`);
-        alert(`Thank you! Your mood check-in (${moodValue.toLowerCase()}) was registered anonymously.`);
+        showAlert(`Thank you! Your mood check-in (${moodValue.toLowerCase()}) was registered anonymously.`, "Mood Logged", "success");
       },
       onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "You have already logged your check-in for this week.");
+        showAlert(err?.response?.data?.message || err.message || "You have already logged your check-in for this week.", "Check-in Logged", "info");
       }
     });
   };
@@ -159,10 +167,10 @@ export const Engagement: React.FC = () => {
     }, {
       onSuccess: () => {
         addAuditLog("Submitted Survey", "Engagement Module", `${activeEmployee?.name} completed active pulse survey`);
-        alert("Survey response saved successfully.");
+        showAlert("Survey response saved successfully.", "Survey Saved", "success");
       },
       onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to submit survey");
+        showAlert(err?.response?.data?.message || err.message || "Failed to submit survey", "Error", "danger");
       }
     });
   };

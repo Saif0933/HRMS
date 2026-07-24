@@ -12,7 +12,7 @@ import {
 import { useApp } from '../context/AppContext';
 
 export const Recruitment: React.FC = () => {
-  const { activeSubModule, setActiveSubModule, addAuditLog } = useApp();
+  const { activeSubModule, setActiveSubModule, addAuditLog, showConfirm, showAlert } = useApp();
 
   // Queries
   const { data: jobsRes, isLoading: jobsLoading } = useJobs();
@@ -47,17 +47,25 @@ export const Recruitment: React.FC = () => {
     e.preventDefault();
     if (!newJobTitle.trim()) return;
 
-    createJobMut.mutate({
-      title: newJobTitle,
-      department: newJobDept,
-    }, {
-      onSuccess: () => {
-        addAuditLog("Created Job Requisition", "Recruitment & ATS", `Opened new position: ${newJobTitle} in ${newJobDept} team`);
-        alert(`Job requisition for "${newJobTitle}" created successfully!`);
-        setNewJobTitle('');
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to create requisition");
+    showConfirm({
+      title: "Confirm Job Requisition",
+      message: `Are you sure you want to open a new position for "${newJobTitle}" in ${newJobDept}?`,
+      type: "confirm",
+      confirmText: "Open Position",
+      onConfirm: () => {
+        createJobMut.mutate({
+          title: newJobTitle,
+          department: newJobDept,
+        }, {
+          onSuccess: () => {
+            addAuditLog("Created Job Requisition", "Recruitment & ATS", `Opened new position: ${newJobTitle} in ${newJobDept} team`);
+            showAlert(`Job requisition for "${newJobTitle}" created successfully!`, "Position Opened", "success");
+            setNewJobTitle('');
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to create requisition", "Error", "danger");
+          }
+        });
       }
     });
   };
@@ -74,21 +82,30 @@ export const Recruitment: React.FC = () => {
     advanceCandidateMut.mutate({ id, stage: nextStage }, {
       onSuccess: () => {
         addAuditLog("ATS Stage Shifted", "Recruitment & ATS", `Moved candidate ${name} to stage ${nextStage}`);
+        showAlert(`Moved candidate ${name} to stage ${nextStage}`, "Stage Advanced", "success");
       },
       onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to advance candidate");
+        showAlert(err?.response?.data?.message || err.message || "Failed to advance candidate", "Error", "danger");
       }
     });
   };
 
   const handleRejectCandidate = (id: string, name: string) => {
-    rejectCandidateMut.mutate(id, {
-      onSuccess: () => {
-        addAuditLog("Candidate Rejected", "Recruitment & ATS", `Rejected candidate ${name} from applicant pipeline`);
-        alert(`Candidate ${name} archived from recruitment track.`);
-      },
-      onError: (err: any) => {
-        alert(err?.response?.data?.message || err.message || "Failed to reject candidate");
+    showConfirm({
+      title: "Archive Candidate",
+      message: `Are you sure you want to archive candidate ${name} from the recruitment pipeline?`,
+      type: "danger",
+      confirmText: "Archive Candidate",
+      onConfirm: () => {
+        rejectCandidateMut.mutate(id, {
+          onSuccess: () => {
+            addAuditLog("Candidate Rejected", "Recruitment & ATS", `Rejected candidate ${name} from applicant pipeline`);
+            showAlert(`Candidate ${name} archived from recruitment track.`, "Archived", "info");
+          },
+          onError: (err: any) => {
+            showAlert(err?.response?.data?.message || err.message || "Failed to reject candidate", "Error", "danger");
+          }
+        });
       }
     });
   };
@@ -105,8 +122,16 @@ export const Recruitment: React.FC = () => {
   const handleGenerateLogin = () => {
     if (!activeOnboardCandidate) return;
 
-    alert(`Triggering login creation for ${activeOnboardCandidate.name}! Credentials sent to ${activeOnboardCandidate.email}.`);
-    addAuditLog("Onboarding Checklist Approved", "Recruitment & ATS", `Approved pre-onboarding checks for candidate ${activeOnboardCandidate.name}`);
+    showConfirm({
+      title: "Generate Employee Login",
+      message: `Trigger login credential creation for ${activeOnboardCandidate.name}? Credentials will be sent to ${activeOnboardCandidate.email}.`,
+      type: "confirm",
+      confirmText: "Generate & Send",
+      onConfirm: () => {
+        showAlert(`Credentials generated and dispatched to ${activeOnboardCandidate.email}!`, "Login Created", "success");
+        addAuditLog("Onboarding Checklist Approved", "Recruitment & ATS", `Approved pre-onboarding checks for candidate ${activeOnboardCandidate.name}`);
+      }
+    });
   };
 
   return (
