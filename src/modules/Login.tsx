@@ -90,14 +90,16 @@ export const Login: React.FC = () => {
             }
 
             // Find corresponding employee from mock lists/state, or create one:
+            const existingEmp = employees.find(emp => emp.email?.toLowerCase() === loggedUser.email?.toLowerCase());
+            const userAvatar = (loggedUser as any).avatar || (loggedUser as any).image || existingEmp?.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120';
+
             const matchedEmployee = {
-              ...(employees.find(emp => emp.email?.toLowerCase() === loggedUser.email?.toLowerCase()) || {
+              ...(existingEmp || {
                 id: loggedUser.id,
                 name: loggedUser.name || 'New User',
                 email: loggedUser.email || '',
                 phone: loggedUser.phone || '',
                 department: 'Engineering',
-                avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120',
                 status: 'Active' as const,
                 joiningDate: new Date().toISOString().split('T')[0],
                 location: 'Mumbai',
@@ -109,6 +111,7 @@ export const Login: React.FC = () => {
                 promotions: [], transfers: [], assets: [],
                 probationDuration: '6 Months', probationEnd: '', confirmationStatus: 'Confirmed' as const
               }),
+              avatar: userAvatar,
               role: role,
               permissions: loggedUser.permissions || [],
             };
@@ -150,14 +153,16 @@ export const Login: React.FC = () => {
               role = 'Manager';
             }
 
+            const existingEmp = employees.find(emp => emp.email?.toLowerCase() === loggedUser.email?.toLowerCase());
+            const userAvatar = (loggedUser as any).avatar || (loggedUser as any).image || existingEmp?.avatar || user.avatar;
+
             const matchedEmployee = {
-              ...(employees.find(emp => emp.email?.toLowerCase() === loggedUser.email?.toLowerCase()) || {
+              ...(existingEmp || {
                 id: loggedUser.id,
                 name: loggedUser.name || 'New User',
                 email: loggedUser.email || '',
                 phone: loggedUser.phone || '',
                 department: 'Engineering',
-                avatar: user.avatar,
                 status: 'Active' as const,
                 joiningDate: new Date().toISOString().split('T')[0],
                 location: 'Mumbai',
@@ -169,6 +174,7 @@ export const Login: React.FC = () => {
                 promotions: [], transfers: [], assets: [],
                 probationDuration: '6 Months', probationEnd: '', confirmationStatus: 'Confirmed' as const
               }),
+              avatar: userAvatar,
               role: role,
               permissions: loggedUser.permissions || [],
             };

@@ -455,16 +455,85 @@ export const Attendance: React.FC = () => {
     });
   };
 
-  // Attendance Calendar (Muster Roll) grid for July 2026
-  const musterDays = Array.from({ length: 30 }, (_, i) => {
-    const dayNum = i + 1;
-    let status: 'Present' | 'Late' | 'Absent' | 'Holiday' | 'WeekOff' = 'Present';
-    if (dayNum % 7 === 4 || dayNum % 7 === 5) status = 'WeekOff';
-    else if (dayNum === 10) status = 'Absent';
-    else if (dayNum === 14) status = 'Late';
-    else if (dayNum === 15) status = 'Holiday';
+  // Attendance Calendar (Muster Roll) State & Dynamic Calculations
+  const [musterMonth, setMusterMonth] = useState<number>(new Date().getMonth()); // 0-indexed
+  const [musterYear, setMusterYear] = useState<number>(new Date().getFullYear());
+  const [musterEmpId, setMusterEmpId] = useState<string>('');
 
-    return { dayNum, status };
+  // Keep musterEmpId updated with selectedEmpId if available
+  useEffect(() => {
+    if (selectedEmpId && !musterEmpId) {
+      setMusterEmpId(selectedEmpId);
+    }
+  }, [selectedEmpId, musterEmpId]);
+
+  const targetMusterEmpId = musterEmpId || selectedEmpId;
+  const targetMusterEmployee = employeesList.find(e => e.id === targetMusterEmpId);
+
+  // Dynamic day generation for selected month and year
+  const daysInMusterMonth = new Date(musterYear, musterMonth + 1, 0).getDate();
+  const firstDayOfWeekIndex = (new Date(musterYear, musterMonth, 1).getDay() + 6) % 7; // 0 = Mon, 6 = Sun
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  // Dynamic status computation for each day of the selected month
+  const dynamicMusterDays: Array<{
+    dayNum: number;
+    dateStr: string;
+    status: 'Present' | 'Late' | 'Absent' | 'Holiday' | 'WeekOff';
+    punchesCount: number;
+    regStatus?: string;
+  }> = Array.from({ length: daysInMusterMonth }, (_, i) => {
+    const dayNum = i + 1;
+    const dateStr = `${musterYear}-${String(musterMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    const dateObj = new Date(musterYear, musterMonth, dayNum);
+    const dayOfWeek = dateObj.getDay(); // 0 = Sun, 6 = Sat
+
+    // Check punches for this employee on this date
+    const dayPunches = punchLogList.filter(log => {
+      if (log.employeeId && log.employeeId !== targetMusterEmpId) return false;
+      const logDateStr = log.createdAt ? new Date(log.createdAt).toISOString().split('T')[0] : '';
+      return logDateStr === dateStr || log.time?.includes(`${monthNames[musterMonth].slice(0, 3)} ${dayNum}`);
+    });
+
+    // Check regularization requests
+    const dayReg = regularizeRequests.find(req => {
+      const isEmpMatch = !req.employeeId || req.employeeId === targetMusterEmpId || req.employeeName === targetMusterEmployee?.name;
+      return isEmpMatch && req.date === dateStr;
+    });
+
+    let status: 'Present' | 'Late' | 'Absent' | 'Holiday' | 'WeekOff' = 'Present';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(musterYear, musterMonth, dayNum);
+    checkDate.setHours(0, 0, 0, 0);
+
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      status = 'WeekOff';
+    } else if (dayReg?.status === 'Approved') {
+      status = 'Present';
+    } else if (dayPunches.length > 0) {
+      const firstIn = dayPunches.find(p => p.type === 'In');
+      if (firstIn) {
+        const inHour = new Date(firstIn.createdAt || Date.now()).getHours();
+        status = inHour >= 10 ? 'Late' : 'Present';
+      } else {
+        status = 'Present';
+      }
+    } else {
+      if (checkDate > today) {
+        status = 'WeekOff';
+      } else {
+        // For past/current working days with no punches or approved regularization, mark as Absent
+        status = 'Absent';
+      }
+    }
+
+    return { dayNum, dateStr, status, punchesCount: dayPunches.length, regStatus: dayReg?.status };
   });
 
   const verifyWithScreenLock = async (): Promise<boolean> => {
@@ -1333,76 +1402,133 @@ export const Attendance: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* ======================================= */}
+        {/* ======================================= */}
       {/* 4. MUSTER ROLL CALENDAR                 */}
       {/* ======================================= */}
       {activeSubModule === 'muster' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 animate-fade-in text-xs">
           <div>
-            <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex items-center justify-between">
-              <span>Muster Roll Grid - July 2026</span>
-              <button 
-                onClick={() => alert("Downloading Muster Roll sheet for this month...")}
-                className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg font-semibold hover:bg-primary hover:text-white transition-colors"
-              >
-                <FileText className="h-3.5 w-3.5" />
-                Muster Report
-              </button>
-            </h3>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 gap-3">
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-white text-base">
+                  Muster Roll Grid — {monthNames[musterMonth]} {musterYear}
+                </h3>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  Showing monthly attendance status for <span className="font-semibold text-slate-700 dark:text-slate-200">{targetMusterEmployee?.name || 'Employee'}</span>
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Employee Filter */}
+                <select
+                  value={targetMusterEmpId}
+                  onChange={(e) => setMusterEmpId(e.target.value)}
+                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-bold focus:outline-none text-xs"
+                >
+                  {employeesList.map(emp => (
+                    <option key={emp.id} value={emp.id} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white">
+                      {emp.name} ({emp.designation || 'Staff'})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Month Selector */}
+                <select
+                  value={musterMonth}
+                  onChange={(e) => setMusterMonth(parseInt(e.target.value))}
+                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-bold focus:outline-none text-xs"
+                >
+                  {monthNames.map((m, idx) => (
+                    <option key={m} value={idx} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white">{m}</option>
+                  ))}
+                </select>
+
+                {/* Year Selector */}
+                <select
+                  value={musterYear}
+                  onChange={(e) => setMusterYear(parseInt(e.target.value))}
+                  className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-bold focus:outline-none text-xs"
+                >
+                  {[2024, 2025, 2026, 2027].map(y => (
+                    <option key={y} value={y} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-white">{y}</option>
+                  ))}
+                </select>
+
+                <button 
+                  onClick={() => {
+                    const csvRows = ["Day,Date,Status,Punches"];
+                    dynamicMusterDays.forEach(d => csvRows.push(`${d.dayNum},${d.dateStr},${d.status},${d.punchesCount}`));
+                    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `Muster_Roll_${targetMusterEmployee?.name || 'Employee'}_${monthNames[musterMonth]}_${musterYear}.csv`;
+                    a.click();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl font-bold shadow-sm hover:scale-105 transition-all text-xs cursor-pointer"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  <span>Download CSV</span>
+                </button>
+              </div>
+            </div>
             
-            {/* Calendar Grid */}
+            {/* Calendar Grid Header */}
             <div className="grid grid-cols-7 gap-2 mt-4">
               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(w => (
-                <div key={w} className="text-center font-bold text-slate-400 py-1">{w}</div>
+                <div key={w} className="text-center font-extrabold text-slate-400 dark:text-slate-400 py-1 text-[11px] uppercase tracking-wider">{w}</div>
               ))}
               
-              {/* Offset days (July 1, 2026 starts on Wednesday) */}
-              <div className="py-2 border border-transparent"></div>
-              <div className="py-2 border border-transparent"></div>
+              {/* Dynamic Offset padding days */}
+              {Array.from({ length: firstDayOfWeekIndex }).map((_, idx) => (
+                <div key={`offset-${idx}`} className="py-2 border border-transparent"></div>
+              ))}
 
-              {musterDays.map((d) => (
+              {/* Dynamic Month Days */}
+              {dynamicMusterDays.map((d) => (
                 <div 
                   key={d.dayNum} 
-                  className={`border rounded-xl p-2.5 text-center flex flex-col justify-between h-14 cursor-pointer hover:border-primary transition-colors ${
-                    d.status === 'Present' ? 'bg-green-50/50 dark:bg-green-950/10 border-green-100 dark:border-green-950/20' :
-                    d.status === 'Late' ? 'bg-amber-50/50 dark:bg-amber-950/10 border-amber-100 dark:border-amber-950/20' :
-                    d.status === 'Absent' ? 'bg-red-50/50 dark:bg-red-950/10 border-red-100 dark:border-red-950/20 animate-pulse' :
-                    d.status === 'Holiday' ? 'bg-blue-50/50 dark:bg-blue-950/10 border-blue-100 dark:border-blue-950/20' :
-                    'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800'
+                  className={`border rounded-xl p-2.5 text-center flex flex-col justify-between h-16 cursor-pointer hover:border-primary hover:shadow-md transition-all ${
+                    d.status === 'Present' ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40' :
+                    d.status === 'Late' ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40' :
+                    d.status === 'Absent' ? 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40' :
+                    d.status === 'Holiday' || d.status === 'WeekOff' ? 'bg-blue-50/60 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/40' :
+                    'bg-slate-50 dark:bg-slate-950 border-slate-200/80 dark:border-slate-800'
                   }`}
                   onClick={() => {
                     if (d.status === 'Absent' || d.status === 'Late') {
-                      setRegDate(`2026-07-${d.dayNum.toString().padStart(2, '0')}`);
+                      setRegDate(d.dateStr);
                       setActiveSubModule('regularize');
                     } else {
-                      alert(`Date selected: Jul ${d.dayNum}. Shift status: ${d.status}`);
+                      showAlert(`Date: ${d.dateStr} | Status: ${d.status} | Recorded Punches: ${d.punchesCount}`, "Muster Day Details", "info");
                     }
                   }}
                 >
-                  <span className="font-bold text-slate-700 dark:text-slate-350">{d.dayNum}</span>
-                  <span className={`text-[8px] font-bold block ${
-                    d.status === 'Present' ? 'text-green-500' :
-                    d.status === 'Late' ? 'text-amber-500' :
-                    d.status === 'Absent' ? 'text-red-500' :
-                    d.status === 'Holiday' ? 'text-blue-500' :
-                    'text-slate-400'
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-slate-800 dark:text-white text-xs">{d.dayNum}</span>
+                    {d.punchesCount > 0 && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" title={`${d.punchesCount} punches`}></span>
+                    )}
+                  </div>
+                  <span className={`text-[9px] font-extrabold block uppercase tracking-tight ${
+                    d.status === 'Present' ? 'text-emerald-600 dark:text-emerald-400' :
+                    d.status === 'Late' ? 'text-amber-600 dark:text-amber-400' :
+                    d.status === 'Absent' ? 'text-rose-600 dark:text-rose-400' :
+                    d.status === 'Holiday' || d.status === 'WeekOff' ? 'text-blue-600 dark:text-blue-400' :
+                    'text-slate-400 dark:text-slate-500'
                   }`}>
-                    {d.status === 'Present' ? 'PRESENT' :
-                     d.status === 'Late' ? 'LATE' :
-                     d.status === 'Absent' ? 'ABSENT' :
-                     d.status === 'Holiday' ? 'HOLIDAY' : 'OFF'}
+                    {d.status}
                   </span>
                 </div>
               ))}
             </div>
             
-            <div className="flex gap-4 items-center mt-4 pt-3 border-t justify-center text-[10px] text-slate-455">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-green-500"></span>Present</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500"></span>Late</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500"></span>Absent</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500"></span>Holiday</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-400"></span>WeekOff</span>
+            <div className="flex flex-wrap gap-4 items-center mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 justify-center text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Present</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500"></span>Late</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-rose-500"></span>Absent</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-500"></span>Holiday</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-slate-400"></span>WeekOff</span>
             </div>
           </div>
         </div>
@@ -1532,14 +1658,107 @@ export const Attendance: React.FC = () => {
                 </thead>
                 <tbody className="divide-y text-slate-650 dark:text-slate-350">
                   {employeesList
-                    .filter(emp => emp.name.toLowerCase().includes(reportSearch.toLowerCase()))
+                    .filter(emp => emp.name.toLowerCase().includes(reportSearch.toLowerCase()) || emp.id.toLowerCase().includes(reportSearch.toLowerCase()))
                     .map((emp) => {
-                      const presentDays = emp.id === 'EMP001' ? 21 : emp.id === 'EMP002' ? 22 : emp.id === 'EMP003' ? 18 : 20;
-                      const lateDays = emp.id === 'EMP001' ? 1 : emp.id === 'EMP002' ? 0 : emp.id === 'EMP003' ? 3 : 2;
-                      const absentDays = emp.id === 'EMP003' ? 4 : emp.id === 'EMP008' ? 1 : 0;
-                      const totalHours = presentDays * 8.5;
-                      const avgLogin = emp.id === 'EMP001' ? '09:12 AM' : emp.id === 'EMP002' ? '09:05 AM' : '09:28 AM';
-                      const attendanceRate = Math.round((presentDays / 22) * 100);
+                      const selectedMonthIdx = monthNames.findIndex(m => m.toLowerCase() === reportMonth.toLowerCase());
+                      const targetMonth = selectedMonthIdx !== -1 ? selectedMonthIdx : new Date().getMonth();
+                      const targetYear = parseInt(reportYear) || new Date().getFullYear();
+
+                      // Filter punch logs for this employee in selected month & year
+                      const empLogs = punchLogList.filter(log => {
+                        const isMatch = !log.employeeId || log.employeeId === emp.id;
+                        if (!isMatch) return false;
+                        if (log.createdAt) {
+                          const d = new Date(log.createdAt);
+                          return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
+                        }
+                        if (log.time) {
+                          return log.time.toLowerCase().includes(reportMonth.slice(0, 3).toLowerCase());
+                        }
+                        return true;
+                      });
+
+                      // Group punches by day
+                      const dayPunchesMap: Record<number, typeof empLogs> = {};
+                      empLogs.forEach((log, idx) => {
+                        const d = log.createdAt ? new Date(log.createdAt) : null;
+                        const dayNum = d ? d.getDate() : (idx + 1);
+                        if (!dayPunchesMap[dayNum]) dayPunchesMap[dayNum] = [];
+                        dayPunchesMap[dayNum].push(log);
+                      });
+
+                      let presentDays = 0;
+                      let lateDays = 0;
+                      let totalWorkMinutes = 0;
+                      let loginTimesInMinutes: number[] = [];
+
+                      Object.entries(dayPunchesMap).forEach(([_, punches]) => {
+                        const firstIn = punches.find(p => p.type === 'In') || punches[0];
+                        if (firstIn) {
+                          const dt = firstIn.createdAt ? new Date(firstIn.createdAt) : null;
+                          if (dt && !isNaN(dt.getTime())) {
+                            const hours = dt.getHours();
+                            const mins = dt.getMinutes();
+                            loginTimesInMinutes.push(hours * 60 + mins);
+                            if (hours >= 10) {
+                              lateDays++;
+                            } else {
+                              presentDays++;
+                            }
+                          } else {
+                            presentDays++;
+                          }
+                        } else {
+                          presentDays++;
+                        }
+                        // Default 8.5 hrs per worked day
+                        totalWorkMinutes += 8.5 * 60;
+                      });
+
+                      // Check approved regularizations for this employee in target month
+                      const approvedRegs = regularizeRequests.filter(req => {
+                        const isEmp = req.employeeId === emp.id || req.employeeName === emp.name;
+                        if (!isEmp || req.status !== 'Approved') return false;
+                        const [y, m] = req.date.split('-');
+                        return parseInt(y) === targetYear && (parseInt(m) - 1) === targetMonth;
+                      });
+
+                      const regDaysCount = approvedRegs.length;
+                      presentDays += regDaysCount;
+
+                      const daysInSelectedMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+                      let totalWorkingDays = 0;
+                      const today = new Date();
+
+                      for (let d = 1; d <= daysInSelectedMonth; d++) {
+                        const checkDate = new Date(targetYear, targetMonth, d);
+                        if (checkDate > today) break;
+                        const dayOfWeek = checkDate.getDay();
+                        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                          totalWorkingDays++;
+                        }
+                      }
+
+                      if (totalWorkingDays === 0) totalWorkingDays = 22; // Fallback standard working days
+
+                      const totalAttended = presentDays + lateDays;
+                      const absentDays = Math.max(0, totalWorkingDays - totalAttended);
+
+                      // Calculate Average Login Time
+                      let avgLogin = 'N/A';
+                      if (loginTimesInMinutes.length > 0) {
+                        const avgMinTotal = Math.round(loginTimesInMinutes.reduce((a, b) => a + b, 0) / loginTimesInMinutes.length);
+                        const avgH = Math.floor(avgMinTotal / 60);
+                        const avgM = avgMinTotal % 60;
+                        const ampm = avgH >= 12 ? 'PM' : 'AM';
+                        const h12 = avgH % 12 || 12;
+                        avgLogin = `${String(h12).padStart(2, '0')}:${String(avgM).padStart(2, '0')} ${ampm}`;
+                      } else if (presentDays > 0) {
+                        avgLogin = '09:15 AM';
+                      }
+
+                      const totalHours = (totalWorkMinutes / 60) + (regDaysCount * 8.5);
+                      const attendanceRate = Math.min(100, Math.round((totalAttended / totalWorkingDays) * 100));
 
                       return (
                         <tr key={emp.id} className="hover:bg-slate-50 dark:hover:bg-slate-850">

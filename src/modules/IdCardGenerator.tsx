@@ -1,21 +1,21 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  CreditCard, 
-  Download, 
-  Printer, 
-  Upload, 
-  UserCheck, 
-  ShieldCheck, 
-  QrCode, 
-  Building, 
-  Sparkles, 
-  Phone, 
-  MapPin, 
+import {
+  Building,
+  Calendar,
   CheckCircle2,
-  Calendar
+  CreditCard,
+  Download,
+  MapPin,
+  Phone,
+  Printer,
+  QrCode,
+  ShieldCheck,
+  Sparkles,
+  Upload,
+  UserCheck
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import React, { useEffect, useRef, useState } from 'react';
 import { useEmployees } from '../api/hook/useEmployee';
+import { useApp } from '../context/AppContext';
 
 type CardTheme = 'navy' | 'dark' | 'emerald' | 'burgundy';
 

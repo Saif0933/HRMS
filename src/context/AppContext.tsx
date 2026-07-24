@@ -292,6 +292,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('currentUser');
     localStorage.removeItem('userRole');
+    // Note: customAvatar is retained so user avatar persists across re-logins
     setActiveModule('dashboard');
   };
 

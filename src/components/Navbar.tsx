@@ -22,6 +22,7 @@ import {
   CornerDownLeft
 } from 'lucide-react';
 import React, { useState } from 'react';
+import { api } from '../api/apiClient';
 import { useApp, UserRole } from '../context/AppContext';
 
 interface NavbarProps {
@@ -37,7 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
     notifications, markAllNotificationsRead, clearNotification,
     globalSearch, setGlobalSearch,
     employees, assets, claims, leaveRequests, tickets,
-    currentUser, logout
+    currentUser, setCurrentUser, logout, showAlert
   } = useApp();
 
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -72,13 +73,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
 
   const currentUserName = currentUser ? currentUser.name : (userRole === 'Super Admin' ? 'Vikram Malhotra' : userRole === 'HR Admin' ? 'Karan Johar' : userRole === 'Manager' ? 'Neha Patel' : 'Aarav Sharma');
   const currentUserRoleText = currentUser ? currentUser.role : (userRole === 'Super Admin' ? 'Chief Executive Officer' : userRole === 'HR Admin' ? 'HR Administrator' : userRole === 'Manager' ? 'Engineering Manager' : 'Senior UI Developer');
-  const currentUserAvatar = currentUser ? currentUser.avatar : (userRole === 'Super Admin'
-    ? "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=120"
-    : userRole === 'HR Admin' 
-    ? "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&q=80&w=120"
-    : userRole === 'Manager'
-    ? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120"
-    : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120");
+  const customAvatar = localStorage.getItem('customAvatar') || '';
+  const currentUserAvatar = (currentUser && currentUser.avatar) 
+    ? currentUser.avatar 
+    : (customAvatar || (userRole === 'Super Admin'
+      ? "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=120"
+      : userRole === 'HR Admin' 
+      ? "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&q=80&w=120"
+      : userRole === 'Manager'
+      ? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120"
+      : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120"));
 
   const languages = [
     { code: 'en', name: 'English (US)' },
@@ -453,21 +457,102 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
 
         {/* User Profile */}
         <div ref={profileRef} className="relative">
-          <button 
-            onClick={() => setShowProfile(!showProfile)}
-            className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            <img 
-              src={currentUserAvatar}
-              alt={currentUserName} 
-              className="h-8 w-8 rounded-full object-cover ring-2 ring-primary/20"
-            />
-            <div className="text-left hidden md:block">
-              <p className="text-xs font-semibold leading-none text-slate-800 dark:text-white">{currentUserName}</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-none">{currentUserRoleText}</p>
-            </div>
-            <ChevronDown className="h-4 w-4 text-slate-500" />
-          </button>
+          <input 
+            type="file"
+            id="navbar-profile-avatar-input"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              try {
+                // Convert file to Base64 Data URI
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                  const dataUrl = event.target?.result as string;
+                  if (!dataUrl) return;
+                  try {
+                    // Try FormData upload first
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('image', dataUrl);
+
+                    const res = await api.post('/documents/upload-avatar', formData);
+                    const uploadedUrl = res.data?.data?.url || res.data?.url;
+                    if (uploadedUrl) {
+                      localStorage.setItem('customAvatar', uploadedUrl);
+                      if (currentUser) {
+                        setCurrentUser({ ...currentUser, avatar: uploadedUrl });
+                      } else {
+                        window.dispatchEvent(new Event('storage'));
+                      }
+                      showAlert("Profile picture uploaded to Cloudinary successfully!", "Success", "success");
+                    }
+                  } catch (apiErr: any) {
+                    // If FormData fails, send JSON payload with Base64 image
+                    try {
+                      const res = await api.post('/documents/upload-avatar', { image: dataUrl });
+                      const uploadedUrl = res.data?.data?.url || res.data?.url;
+                      if (uploadedUrl) {
+                        localStorage.setItem('customAvatar', uploadedUrl);
+                        if (currentUser) {
+                          setCurrentUser({ ...currentUser, avatar: uploadedUrl });
+                        } else {
+                          window.dispatchEvent(new Event('storage'));
+                        }
+                        showAlert("Profile picture uploaded to Cloudinary successfully!", "Success", "success");
+                        return;
+                      }
+                    } catch (jsonErr) {
+                      // Fallback to local state if backend is down
+                      localStorage.setItem('customAvatar', dataUrl);
+                      if (currentUser) {
+                        setCurrentUser({ ...currentUser, avatar: dataUrl });
+                      } else {
+                        window.dispatchEvent(new Event('storage'));
+                      }
+                      showAlert("Profile picture updated locally!", "Success", "success");
+                    }
+                  }
+                };
+                reader.readAsDataURL(file);
+              } catch (err: any) {
+                console.error("Cloudinary Avatar Upload Error:", err);
+              }
+            }}
+          />
+          <div className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+            <button 
+              type="button"
+              onClick={() => {
+                document.getElementById('navbar-profile-avatar-input')?.click();
+              }}
+              title="Click to change profile picture"
+              className="relative cursor-pointer group"
+            >
+              <img 
+                src={currentUserAvatar}
+                alt={currentUserName} 
+                className="h-8 w-8 rounded-full object-cover ring-2 ring-primary/20 group-hover:ring-primary transition-all"
+              />
+              <div className="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-[8px] text-white font-bold">Edit</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowProfile(!showProfile)}
+              className="flex items-center gap-2 text-left cursor-pointer"
+            >
+              <div className="hidden md:block">
+                <p className="text-xs font-semibold leading-none text-slate-800 dark:text-white">{currentUserName}</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-none">{currentUserRoleText}</p>
+              </div>
+              <ChevronDown 
+                className="h-4 w-4 text-slate-500 hover:text-primary transition-colors" 
+              />
+            </button>
+          </div>
 
           {showProfile && (
             <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-2 z-50 animate-fade-in">

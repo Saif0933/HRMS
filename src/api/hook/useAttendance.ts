@@ -10,6 +10,7 @@ export interface BaseResponse<T> {
 
 export interface PunchLog {
   id: string;
+  employeeId?: string;
   time: string;
   type: 'In' | 'Out';
   method: string;

@@ -24,10 +24,9 @@ api.interceptors.request.use((request) => {
     request.headers.Authorization = `Bearer ${token}`;
   }
   
-  // Debugging request data safely
-  const isFormData = request.data && (request.data instanceof FormData || request.data._parts);
-  
-  if (isFormData) {
+  // For FormData requests, delete default Content-Type so browser sets boundary automatically
+  if (request.data instanceof FormData) {
+    delete request.headers['Content-Type'];
     console.log('Starting Request (FormData):', request.url);
   } else {
     console.log('Starting Request:', request.url, JSON.stringify(request.data, null, 2));
