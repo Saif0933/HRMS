@@ -151,27 +151,27 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
     <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm transition-colors duration-200">
       
       {/* Mobile Toggle & Search */}
-      <div className="flex items-center gap-2 sm:gap-4 flex-1 max-w-md">
+      <div className="flex items-center gap-1.5 sm:gap-4 flex-1 max-w-xs sm:max-w-md">
         <button 
           onClick={onToggleMobileMenu}
-          className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors md:hidden shrink-0"
+          className="p-1.5 sm:p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors md:hidden shrink-0"
           title="Toggle Navigation Menu"
         >
           <Menu className="h-5 w-5" />
         </button>
 
         <div ref={searchRef} className="relative w-full">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-500" />
+          <Search className="absolute left-2.5 sm:left-3 top-2.5 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 dark:text-slate-500" />
           <input 
             type="text" 
-            placeholder="Global search (e.g. employee, asset, module)..." 
+            placeholder="Search..." 
             value={globalSearch}
             onChange={(e) => {
               setGlobalSearch(e.target.value);
               setShowSearchResults(true);
             }}
             onFocus={() => setShowSearchResults(true)}
-            className="w-full pl-9 pr-8 py-1.5 sm:py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs sm:text-sm bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-700 dark:text-slate-200"
+            className="w-full pl-8 sm:pl-9 pr-7 sm:pr-8 py-1.5 sm:py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs sm:text-sm bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-slate-700 dark:text-slate-200"
           />
           {globalSearch && (
             <button
@@ -179,16 +179,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
                 setGlobalSearch('');
                 setShowSearchResults(false);
               }}
-              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              className="absolute right-2 top-2 sm:right-2.5 sm:top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </button>
           )}
 
           {/* Real-time Global Search Dropdown Overlay */}
           {showSearchResults && query && (
             <div 
-              className="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[80vh] overflow-y-auto animate-fade-in divide-y divide-slate-100 dark:divide-slate-800"
+              className="absolute left-0 right-0 sm:right-auto mt-2 w-[calc(100vw-32px)] sm:w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[80vh] overflow-y-auto animate-fade-in divide-y divide-slate-100 dark:divide-slate-800"
             >
               {totalResultsCount === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-400">
@@ -248,13 +248,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
                                 {emp.name} <span className="text-[10px] text-slate-400 font-normal">({emp.id})</span>
                               </p>
                               <p className="text-[10px] text-slate-400">
-                                {emp.role} • {typeof emp.department === 'string' ? emp.department : ((emp.department as { name?: string })?.name || 'General')}
+                                {typeof emp.department === 'string' ? emp.department : ((emp.department as any)?.name || '')} • {emp.role}
                               </p>
                             </div>
                           </div>
-                          <span className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                            View Profile
-                          </span>
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary transition-transform group-hover:translate-x-1" />
                         </button>
                       ))}
                     </div>
@@ -264,7 +262,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
                   {matchingAssets.length > 0 && (
                     <div className="p-2">
                       <span className="text-[10px] text-slate-400 font-extrabold uppercase px-3 py-1 block tracking-wider">
-                        Hardware & Assets ({matchingAssets.length})
+                        Assets ({matchingAssets.length})
                       </span>
                       {matchingAssets.map((asset) => (
                         <button
@@ -273,7 +271,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
                           className="w-full text-left px-3 py-2 rounded-xl hover:bg-primary/10 text-xs flex items-center justify-between group transition-colors"
                         >
                           <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 bg-amber-500/10 text-amber-600 rounded-lg">
+                            <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-amber-500">
                               <Laptop className="w-4 h-4" />
                             </div>
                             <div>
@@ -281,7 +279,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
                                 {asset.name}
                               </p>
                               <p className="text-[10px] text-slate-400">
-                                S/N: {asset.serialNumber} • Status: {asset.status}
+                                S/N: {asset.serialNumber} • {asset.status}
                               </p>
                             </div>
                           </div>
@@ -295,7 +293,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
                   {matchingClaims.length > 0 && (
                     <div className="p-2">
                       <span className="text-[10px] text-slate-400 font-extrabold uppercase px-3 py-1 block tracking-wider">
-                        Travel & Reimbursements ({matchingClaims.length})
+                        Reimbursement Claims ({matchingClaims.length})
                       </span>
                       {matchingClaims.map((claim) => (
                         <button
@@ -303,13 +301,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
                           onClick={() => navigateToResult('claims', 'my-claims')}
                           className="w-full text-left px-3 py-2 rounded-xl hover:bg-primary/10 text-xs flex items-center justify-between group transition-colors"
                         >
-                          <div>
-                            <p className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-primary transition-colors">
-                              {claim.employeeName} - {claim.type} (₹{claim.amount})
-                            </p>
-                            <p className="text-[10px] text-slate-400">
-                              Status: {claim.status} • ID: {claim.id}
-                            </p>
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-emerald-500">
+                              <Wallet className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-primary transition-colors">
+                                {claim.type} Claim - ₹{claim.amount}
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                By {claim.employeeName} • {claim.status}
+                              </p>
+                            </div>
                           </div>
                           <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-primary transition-transform group-hover:translate-x-1" />
                         </button>
@@ -324,10 +327,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
       </div>
 
       {/* Action Icons */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 sm:gap-2.5">
         
         {/* Role Quick Indicator */}
-        <div className="hidden lg:flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full text-xs font-semibold text-slate-600 dark:text-slate-300">
+        <div className="hidden xl:flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full text-xs font-semibold text-slate-600 dark:text-slate-300">
           <ShieldAlert className="h-3.5 w-3.5 text-primary" />
           <span>Role: {userRole}</span>
         </div>
@@ -335,21 +338,21 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
         {/* Theme Toggle */}
         <button 
           onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-          className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          className="p-1.5 sm:p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           title="Toggle Theme"
         >
-          {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+          {theme === 'light' ? <Moon className="h-4.5 w-4.5 sm:h-5 sm:w-5" /> : <Sun className="h-4.5 w-4.5 sm:h-5 sm:w-5" />}
         </button>
 
         {/* Language Selector */}
-        <div className="relative">
+        <div className="relative hidden xs:block sm:block">
           <button 
             onClick={() => setShowLangDropdown(!showLangDropdown)}
-            className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1"
+            className="p-1.5 sm:p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1"
             title="Select Language"
           >
-            <Globe className="h-5 w-5" />
-            <ChevronDown className="h-3.5 w-3.5" />
+            <Globe className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+            <ChevronDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
           </button>
           
           {showLangDropdown && (

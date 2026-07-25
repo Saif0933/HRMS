@@ -898,7 +898,7 @@ export const EmployeeManagement: React.FC = () => {
 
   const dbEmployees = employeesResponse?.data || [];
 
-  const employees = dbEmployees.length > 0 ? dbEmployees.map(emp => {
+  const employees = dbEmployees.map(emp => {
     const override = empOverridesMap[emp.id] || empOverridesMap[(emp as any).employeeId] || empOverridesMap[emp.name];
     return {
       id: emp.id,
@@ -913,10 +913,10 @@ export const EmployeeManagement: React.FC = () => {
               emp.status === 'PROBATION' ? 'Probation' :
               emp.status === 'RESIGNED' ? 'Resigned' : 'Terminated'),
       joiningDate: emp.joiningDate ? new Date(emp.joiningDate).toISOString().split('T')[0] : '',
-      location: emp.location || 'Mumbai',
-      role: override?.role || emp.designation || 'Software Engineer',
-      department: override?.department || (typeof emp.department === 'string' ? emp.department : (emp.department?.name || 'Engineering')),
-      manager: emp.manager?.name || 'Neha Patel',
+      location: emp.location || '',
+      role: override?.role || emp.designation || (emp as any).user?.role?.name || '',
+      department: override?.department || (typeof emp.department === 'string' ? emp.department : (emp.department?.name || '')),
+      manager: emp.manager?.name || '',
       basic: override?.basic ?? emp.basic ?? 0,
       hra: emp.hra ?? 0,
       allowance: emp.allowance ?? 0,
@@ -942,30 +942,19 @@ export const EmployeeManagement: React.FC = () => {
       pastCompanies: (emp as any).pastCompanies || [],
       promotions: (emp as any).promotions || [],
       transfers: (emp as any).transfers || [],
-      probationDuration: emp.probationDuration || '6 Months',
+      probationDuration: emp.probationDuration || '',
       probationEnd: emp.probationEnd ? new Date(emp.probationEnd).toISOString().split('T')[0] : '',
       confirmationStatus: emp.confirmationStatus === 'CONFIRMED' ? 'Confirmed' :
                           emp.confirmationStatus === 'EXTENDED' ? 'Extended' : 'Pending',
-      assets: (emp as any).assets || ['AST-100 (ID Card)'],
+      assets: (emp as any).assets || [],
       clearanceStatus: (override?.clearanceStatus || (emp.clearanceStatus === 'APPROVED' ? 'Approved' : 'Pending')) as any,
       exitDate: emp.exitDate ? new Date(emp.exitDate).toISOString().split('T')[0] : undefined,
       userId: emp.userId
     } as Employee;
-  }) : contextEmployees.map(emp => {
-    const override = empOverridesMap[emp.id] || empOverridesMap[(emp as any).employeeId] || empOverridesMap[emp.name];
-    return {
-      ...emp,
-      role: override?.role || emp.role,
-      department: override?.department || emp.department,
-      basic: override?.basic ?? emp.basic,
-      netSalary: override?.netSalary ?? emp.netSalary,
-      status: override?.status || emp.status,
-      clearanceStatus: override?.clearanceStatus || emp.clearanceStatus,
-    };
   });
 
   // Helper selectors
-  const activeEmployee = employees.find(e => e.id === selectedEmployeeId) || employees[0] || contextEmployees[0];
+  const activeEmployee = employees.find(e => e.id === selectedEmployeeId) || employees[0];
 
   // Org Chart 360 Zoom & Pan State
   const [orgChartScale, setOrgChartScale] = useState<number>(1);
@@ -1758,6 +1747,7 @@ export const EmployeeManagement: React.FC = () => {
 
     alert(`Success! Clearance checklist approved & F&F settlement finalized for ${targetEmp.name}.`);
   };
+
 
   return (
     <div className="space-y-6">
