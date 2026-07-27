@@ -1,26 +1,32 @@
-import React, { useState } from 'react';
 import {
-  ShieldCheck,
-  Cloud,
-  Headphones,
-  RefreshCw,
-  Send,
-  Star,
+  ArrowRight,
   Building,
   Check,
-  Minus,
-  Lock,
-  Download,
-  CreditCard,
   CheckCircle2,
-  Sparkles,
-  ArrowRight
+  Cloud,
+  Headphones,
+  Lock,
+  Minus,
+  RefreshCw,
+  Send,
+  ShieldCheck,
+  Star
 } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  useSubscribePlan,
+  useSubscriptionComparisons,
+  useSubscriptionPlans,
+} from '../api/hook/useSubscription';
 import { useApp } from '../context/AppContext';
 
 export const Subscription: React.FC = () => {
-  const { theme, showAlert, showConfirm } = useApp();
+  const { showAlert, showConfirm } = useApp();
   const [selectedPlan, setSelectedPlan] = useState<string>('pro');
+
+  const { data: plansResponse, isLoading: isPlansLoading } = useSubscriptionPlans();
+  const { data: compareResponse } = useSubscriptionComparisons();
+  const subscribeMutation = useSubscribePlan();
 
   const topValueProps = [
     {
@@ -49,7 +55,7 @@ export const Subscription: React.FC = () => {
     }
   ];
 
-  const plans = [
+  const defaultPlans = [
     {
       id: 'basic',
       name: 'Basic',
@@ -122,7 +128,27 @@ export const Subscription: React.FC = () => {
     }
   ];
 
-  const comparisonRows = [
+  const plans = plansResponse?.data && plansResponse.data.length > 0
+    ? plansResponse.data.map((p) => {
+        const iconMap: Record<string, any> = { basic: Send, pro: Star, enterprise: Building };
+        return {
+          id: p.code || p.id,
+          name: p.name,
+          tagline: p.tagline || '',
+          icon: iconMap[p.code] || Send,
+          iconBg: p.iconBg || 'bg-indigo-100 text-indigo-600',
+          price: p.price.toLocaleString('en-IN'),
+          billing: p.billing || 'Billed annually',
+          btnText: p.btnText || 'Get Started',
+          btnStyle: p.btnStyle || '',
+          checkColor: p.checkColor || 'text-indigo-600',
+          popular: p.popular,
+          features: p.features || []
+        };
+      })
+    : defaultPlans;
+
+  const defaultComparisonRows = [
     { label: 'Employee Limit', basic: 'Up to 25', pro: 'Up to 100', ent: 'Unlimited' },
     { label: 'Attendance Management', basic: true, pro: true, ent: true },
     { label: 'Leave Management', basic: true, pro: true, ent: true },
@@ -134,14 +160,37 @@ export const Subscription: React.FC = () => {
     { label: 'Dedicated Support', basic: 'Email', pro: 'Priority Email', ent: '24/7 Phone & Email' }
   ];
 
-  const handleUpgrade = (planName: string) => {
+  const parseVal = (val: string) => {
+    if (val === 'true') return true;
+    if (val === 'false') return false;
+    return val;
+  };
+
+  const comparisonRows = compareResponse?.data && compareResponse.data.length > 0
+    ? compareResponse.data.map((r) => ({
+        label: r.label,
+        basic: parseVal(r.basic),
+        pro: parseVal(r.pro),
+        ent: parseVal(r.ent)
+      }))
+    : defaultComparisonRows;
+
+  const handleUpgrade = (planIdOrName: string, planName?: string) => {
+    const targetName = planName || planIdOrName;
+    const targetId = planIdOrName.toLowerCase();
+
     showConfirm({
-      title: `Select ${planName} Plan`,
-      message: `Are you sure you want to subscribe to the ${planName} plan?`,
+      title: `Select ${targetName} Plan`,
+      message: `Are you sure you want to subscribe to the ${targetName} plan?`,
       type: 'confirm',
       confirmText: 'Proceed',
-      onConfirm: () => {
-        showAlert(`Selected ${planName} plan successfully. Redirecting to payment...`, 'Success', 'success');
+      onConfirm: async () => {
+        try {
+          await subscribeMutation.mutateAsync({ planId: targetId });
+          showAlert(`Subscribed to ${targetName} plan successfully!`, 'Success', 'success');
+        } catch (err: any) {
+          showAlert(err?.response?.data?.message || err?.message || 'Failed to subscribe to plan', 'Subscription Error', 'danger');
+        }
       }
     });
   };
@@ -245,7 +294,7 @@ export const Subscription: React.FC = () => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleUpgrade(plan.name);
+                      handleUpgrade(plan.id, plan.name);
                     }}
                     className={`group/btn w-full py-2.5 px-4 rounded-xl font-extrabold text-xs transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-md hover:shadow-xl ${
                       plan.popular
