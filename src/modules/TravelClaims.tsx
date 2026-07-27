@@ -61,6 +61,9 @@ export const TravelClaims: React.FC = () => {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Approval status filter state
+  const [approvalStatusFilter, setApprovalStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setReceiptFile(e.target.files[0]);
@@ -405,60 +408,82 @@ export const TravelClaims: React.FC = () => {
       {activeSubModule === 'approvals' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4 animate-fade-in text-xs">
           <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b pb-2 flex items-center justify-between">
-            <span>Pending Team Claims</span>
-            <span className="bg-amber-100 text-amber-850 px-2 py-0.5 rounded-full font-bold">
-              {claimsLoading ? "..." : claimsList.filter(c => c.status === 'Pending').length} Pending
-            </span>
+            <span>Team Claims Approvals</span>
+            <div className="flex items-center gap-2">
+              <label htmlFor="approval-status-filter" className="text-slate-500 dark:text-slate-400 font-medium text-xs">Status Filter:</label>
+              <select
+                id="approval-status-filter"
+                value={approvalStatusFilter}
+                onChange={(e) => setApprovalStatusFilter(e.target.value as any)}
+                className="px-3 py-1.5 border rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 text-xs cursor-pointer"
+              >
+                <option value="All">All (Approve / Reject / Pending)</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
           </h3>
 
           {claimsLoading ? (
             <div className="py-8 text-center text-slate-400 font-medium">Loading claims...</div>
           ) : (
             <div className="space-y-3">
-              {claimsList.filter(c => c.status === 'Pending').length === 0 ? (
-                <p className="text-slate-450 text-center py-6">All pending team claims are resolved.</p>
+              {claimsList.filter(c => approvalStatusFilter === 'All' ? true : c.status === approvalStatusFilter).length === 0 ? (
+                <p className="text-slate-450 text-center py-6">No claims found for the selected status.</p>
               ) : (
-                claimsList.filter(c => c.status === 'Pending').map((claim) => (
-                  <div key={claim.id} className="p-4 border border-slate-200/50 dark:border-slate-850 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-950 gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-800 dark:text-white">{claim.employeeName}</span>
-                        <span className="bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full text-[9px] font-bold">{claim.type} Claim</span>
-                      </div>
-                      <p className="text-slate-500 dark:text-slate-400 mt-1">
-                        Amount: <span className="font-bold text-slate-700 dark:text-slate-305">₹{claim.amount.toLocaleString()}</span> • Applied Date: {claim.date}
-                      </p>
-                      <p className="text-slate-450 mt-0.5">Reason: "{claim.reason}"</p>
-                      {claim.receiptUrl && (
-                        <div className="mt-1.5 flex items-center gap-1 text-[10px] text-primary dark:text-blue-400 font-medium bg-primary/5 dark:bg-blue-950/20 px-2 py-0.5 rounded-md w-fit">
-                          <Paperclip className="h-3 w-3 shrink-0" />
-                          <span className="truncate max-w-[180px]">{claim.receiptUrl}</span>
+                claimsList
+                  .filter(c => approvalStatusFilter === 'All' ? true : c.status === approvalStatusFilter)
+                  .map((claim) => (
+                    <div key={claim.id} className="p-4 border border-slate-200/50 dark:border-slate-850 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-950 gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-800 dark:text-white">{claim.employeeName}</span>
+                          <span className="bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full text-[9px] font-bold">{claim.type} Claim</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                            claim.status === 'Approved' ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300' :
+                            claim.status === 'Pending' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' :
+                            'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'
+                          }`}>
+                            {claim.status}
+                          </span>
                         </div>
+                        <p className="text-slate-500 dark:text-slate-400 mt-1">
+                          Amount: <span className="font-bold text-slate-700 dark:text-slate-305">₹{claim.amount.toLocaleString()}</span> • Applied Date: {claim.date}
+                        </p>
+                        <p className="text-slate-450 mt-0.5">Reason: "{claim.reason}"</p>
+                        {claim.receiptUrl && (
+                          <div className="mt-1.5 flex items-center gap-1 text-[10px] text-primary dark:text-blue-400 font-medium bg-primary/5 dark:bg-blue-950/20 px-2 py-0.5 rounded-md w-fit">
+                            <Paperclip className="h-3 w-3 shrink-0" />
+                            <span className="truncate max-w-[180px]">{claim.receiptUrl}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {claim.status === 'Pending' && (
+                        !isApprover ? (
+                          <span className="text-slate-400 font-bold uppercase text-[9px] bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">Awaiting Manager Action</span>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => handleApprove(claim.id, claim.employeeName, claim.amount)}
+                              disabled={updateStatusMut.isPending}
+                              className="px-3 py-1 bg-green-500 text-white rounded-lg font-bold flex items-center gap-1 hover:bg-green-600 transition-colors disabled:opacity-50"
+                            >
+                              <Check className="h-3.5 w-3.5" /> Approve
+                            </button>
+                            <button 
+                              onClick={() => handleReject(claim.id, claim.employeeName, claim.amount)}
+                              disabled={updateStatusMut.isPending}
+                              className="px-3 py-1 bg-red-500 text-white rounded-lg font-bold flex items-center gap-1 hover:bg-red-600 transition-colors disabled:opacity-50"
+                            >
+                              <X className="h-3.5 w-3.5" /> Reject
+                            </button>
+                          </div>
+                        )
                       )}
                     </div>
-                    
-                    {!isApprover ? (
-                      <span className="text-slate-400 font-bold uppercase text-[9px] bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">Awaiting Manager Action</span>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => handleApprove(claim.id, claim.employeeName, claim.amount)}
-                          disabled={updateStatusMut.isPending}
-                          className="px-3 py-1 bg-green-500 text-white rounded-lg font-bold flex items-center gap-1 hover:bg-green-600 transition-colors disabled:opacity-50"
-                        >
-                          <Check className="h-3.5 w-3.5" /> Approve
-                        </button>
-                        <button 
-                          onClick={() => handleReject(claim.id, claim.employeeName, claim.amount)}
-                          disabled={updateStatusMut.isPending}
-                          className="px-3 py-1 bg-red-500 text-white rounded-lg font-bold flex items-center gap-1 hover:bg-red-600 transition-colors disabled:opacity-50"
-                        >
-                          <X className="h-3.5 w-3.5" /> Reject
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
+                  ))
               )}
             </div>
           )}
@@ -468,3 +493,4 @@ export const TravelClaims: React.FC = () => {
     </div>
   );
 };
+

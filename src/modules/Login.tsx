@@ -9,6 +9,7 @@ export const Login: React.FC = () => {
     setIsAuthenticated, 
     setCurrentUser, 
     setUserRole, 
+    setOrganizationId,
     theme, 
     setTheme 
   } = useApp();
@@ -118,6 +119,7 @@ export const Login: React.FC = () => {
 
             setCurrentUser(matchedEmployee as any);
             setUserRole(role);
+            setOrganizationId((loggedUser as any).organizationId || null);
             setIsAuthenticated(true);
           } else {
             setError('Verification failed. Unable to fetch user details.');
@@ -181,6 +183,7 @@ export const Login: React.FC = () => {
 
             setCurrentUser(matchedEmployee as any);
             setUserRole(role);
+            setOrganizationId((loggedUser as any).organizationId || null);
             setIsAuthenticated(true);
           }
         },

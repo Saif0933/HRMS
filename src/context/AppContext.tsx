@@ -86,6 +86,8 @@ interface AppContextType {
   setIsAuthenticated: (auth: boolean) => void;
   currentUser: Employee | null;
   setCurrentUser: (emp: Employee | null) => void;
+  organizationId: string | null;
+  setOrganizationId: (id: string | null) => void;
   logout: () => void;
 }
 
@@ -116,6 +118,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return 'HR Admin';
     }
   });
+  const [organizationId, setOrganizationIdState] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('organizationId') || null;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
     localStorage.setItem('isAuthenticated', String(isAuthenticated));
@@ -132,6 +141,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('userRole', userRole);
   }, [userRole]);
+
+  useEffect(() => {
+    if (organizationId) {
+      localStorage.setItem('organizationId', organizationId);
+    } else {
+      localStorage.removeItem('organizationId');
+    }
+  }, [organizationId]);
+
+  const setOrganizationId = (id: string | null) => {
+    setOrganizationIdState(id);
+  };
   const getDefaultSubModule = (module: string): string => {
     switch (module) {
       case 'documents':
@@ -289,9 +310,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const logout = () => {
     setIsAuthenticated(false);
     setCurrentUser(null);
+    setOrganizationIdState(null);
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('currentUser');
     localStorage.removeItem('userRole');
+    localStorage.removeItem('organizationId');
+    localStorage.removeItem('token');
     // Note: customAvatar is retained so user avatar persists across re-logins
     setActiveModule('dashboard');
   };
@@ -304,6 +328,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       activeModule, setActiveModule,
       activeSubModule, setActiveSubModule,
       selectedEmployeeId, setSelectedEmployeeId,
+      organizationId, setOrganizationId,
       employees, setEmployees,
       leaveRequests, setLeaveRequests,
       claims, setClaims,
@@ -322,6 +347,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsAuthenticated,
       currentUser,
       setCurrentUser,
+      organizationId, setOrganizationId,
       logout
     }}>
       {children}
