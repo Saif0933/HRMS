@@ -31,6 +31,7 @@ import {
     ZoomOut
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
+import api from '../api/apiClient';
 import {
     Department,
     useCreateDepartment,
@@ -987,6 +988,7 @@ export const EmployeeManagement: React.FC = () => {
   const [pQualification, setPQualification] = useState('');
   const [pUniversity, setPUniversity] = useState('');
   const [pPassingYear, setPPassingYear] = useState('');
+  const [pAvatar, setPAvatar] = useState('');
 
   // Salary Details Edit State
   const [editSalaryMode, setEditSalaryMode] = useState(false);
@@ -1419,8 +1421,9 @@ export const EmployeeManagement: React.FC = () => {
         maritalStatus: pMaritalStatus || null,
         qualification: pQualification || null,
         university: pUniversity || null,
-        passingYear: pPassingYear || null
-      }
+        passingYear: pPassingYear || null,
+        avatar: pAvatar || null
+      } as any
     }, {
       onSuccess: () => {
         setEditPersonalMode(false);
@@ -2198,6 +2201,7 @@ export const EmployeeManagement: React.FC = () => {
                         setPQualification(personalDetails.qualification || '');
                         setPUniversity(personalDetails.university || '');
                         setPPassingYear(personalDetails.passingYear || '');
+                        setPAvatar((personalDetails as any).avatar || activeEmployee.avatar || '');
                         setEditPersonalMode(!editPersonalMode);
                       }}
                       className="text-xs text-primary hover:underline font-bold"
@@ -2208,6 +2212,43 @@ export const EmployeeManagement: React.FC = () => {
                   {editPersonalMode ? (
                     <form onSubmit={handleUpdatePersonal} className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
+                        <div className="col-span-2 space-y-1 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                          <label className="text-slate-400 font-medium block text-xs">Profile Photo / Avatar</label>
+                          <div className="flex items-center gap-3">
+                            {pAvatar ? (
+                              <img src={pAvatar} alt="Preview" className="w-10 h-10 rounded-full object-cover border" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-[10px]">
+                                Photo
+                              </div>
+                            )}
+                            <input 
+                              type="file" 
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = async (event) => {
+                                  const dataUrl = event.target?.result as string;
+                                  if (dataUrl) {
+                                    setPAvatar(dataUrl);
+                                    try {
+                                      const formData = new FormData();
+                                      formData.append('file', file);
+                                      formData.append('image', dataUrl);
+                                      const res = await api.post('/documents/upload-avatar', formData);
+                                      const uploadedUrl = res.data?.data?.url || res.data?.url;
+                                      if (uploadedUrl) setPAvatar(uploadedUrl);
+                                    } catch (_) {}
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }}
+                              className="text-xs text-slate-600 dark:text-slate-300 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                            />
+                          </div>
+                        </div>
                         <div className="space-y-1">
                           <label className="text-slate-400 font-medium">Gender</label>
                           <select 
@@ -2269,6 +2310,14 @@ export const EmployeeManagement: React.FC = () => {
                     </form>
                   ) : (
                     <div className="grid grid-cols-2 gap-3.5 p-3.5 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-100 dark:border-slate-800">
+                      <div className="col-span-2 flex items-center gap-3 pb-2 border-b dark:border-slate-800">
+                        <span className="text-slate-400 block text-[10px]">Profile Photo</span>
+                        {(personalDetails.avatar || activeEmployee.avatar) ? (
+                          <img src={personalDetails.avatar || activeEmployee.avatar} alt={activeEmployee.name} className="w-10 h-10 rounded-full object-cover border" />
+                        ) : (
+                          <span className="text-xs font-semibold text-slate-500">Not Uploaded</span>
+                        )}
+                      </div>
                       <div><span className="text-slate-400 block text-[10px]">Gender</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.gender || 'Male'}</p></div>
                       <div><span className="text-slate-400 block text-[10px]">Date of Birth</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.dob || '1995-08-15'}</p></div>
                       <div><span className="text-slate-400 block text-[10px]">Blood Group</span><p className="font-semibold mt-0.5 text-slate-800 dark:text-slate-150">{personalDetails.bloodGroup || 'O+'}</p></div>
@@ -3406,6 +3455,43 @@ export const EmployeeManagement: React.FC = () => {
             <div className="space-y-4">
               <h3 className="font-bold text-slate-800 dark:text-white text-sm">Step 1: Personal Details & Academics</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="col-span-1 md:col-span-3 space-y-1 bg-slate-50 dark:bg-slate-950 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
+                  <label className="text-slate-400 font-medium block text-xs">Profile Photo / Avatar</label>
+                  <div className="flex items-center gap-3">
+                    {newEmp.avatar ? (
+                      <img src={newEmp.avatar} alt="Preview" className="w-10 h-10 rounded-full object-cover border" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-[10px]">
+                        Photo
+                      </div>
+                    )}
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = async (event) => {
+                          const dataUrl = event.target?.result as string;
+                          if (dataUrl) {
+                            setNewEmp(prev => ({ ...prev, avatar: dataUrl }));
+                            try {
+                              const formData = new FormData();
+                              formData.append('file', file);
+                              formData.append('image', dataUrl);
+                              const res = await api.post('/documents/upload-avatar', formData);
+                              const uploadedUrl = res.data?.data?.url || res.data?.url;
+                              if (uploadedUrl) setNewEmp(prev => ({ ...prev, avatar: uploadedUrl }));
+                            } catch (_) {}
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                      className="text-xs text-slate-600 dark:text-slate-300 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                    />
+                  </div>
+                </div>
                 <div className="space-y-1">
                   <label className="text-slate-400 font-medium">Full Name</label>
                   <input 

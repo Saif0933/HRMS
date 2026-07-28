@@ -194,7 +194,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, setMobileO
                 <Landmark className="h-5 w-5" />
               </div>
               <div className="flex flex-col">
-                <span className="font-extrabold text-white tracking-wide text-lg leading-none">MintaClub HRMS</span>
+                <span className="font-extrabold text-white tracking-wide text-lg leading-none">Symbosys HRMS</span>
                 <span className="text-[10px] text-slate-500 font-semibold uppercase mt-0.5">Enterprise Suite</span>
               </div>
             </div>

@@ -151,6 +151,7 @@ export interface PersonalDetails {
   fatherName?: string | null;
   permanentAddress?: string | null;
   languagesSpoken?: string | null;
+  avatar?: string | null;
 }
 
 /**
