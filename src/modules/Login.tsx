@@ -211,7 +211,7 @@ export const Login: React.FC = () => {
             <Landmark className="h-6 w-6" />
           </div>
           <div className="flex flex-col">
-            <span className="font-extrabold text-slate-900 dark:text-white tracking-wide text-xl leading-none">factoHR</span>
+            <span className="font-extrabold text-slate-900 dark:text-white tracking-wide text-xl leading-none">MintaClub HRMS</span>
             <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase mt-1">Enterprise Suite</span>
           </div>
         </div>
