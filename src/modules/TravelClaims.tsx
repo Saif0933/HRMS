@@ -460,27 +460,34 @@ export const TravelClaims: React.FC = () => {
                         )}
                       </div>
                       
-                      {claim.status === 'Pending' && (
-                        !isApprover ? (
-                          <span className="text-slate-400 font-bold uppercase text-[9px] bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">Awaiting Manager Action</span>
-                        ) : (
-                          <div className="flex gap-2">
-                            <button 
-                              onClick={() => handleApprove(claim.id, claim.employeeName, claim.amount)}
-                              disabled={updateStatusMut.isPending}
-                              className="px-3 py-1 bg-green-500 text-white rounded-lg font-bold flex items-center gap-1 hover:bg-green-600 transition-colors disabled:opacity-50"
-                            >
-                              <Check className="h-3.5 w-3.5" /> Approve
-                            </button>
-                            <button 
-                              onClick={() => handleReject(claim.id, claim.employeeName, claim.amount)}
-                              disabled={updateStatusMut.isPending}
-                              className="px-3 py-1 bg-red-500 text-white rounded-lg font-bold flex items-center gap-1 hover:bg-red-600 transition-colors disabled:opacity-50"
-                            >
-                              <X className="h-3.5 w-3.5" /> Reject
-                            </button>
-                          </div>
-                        )
+                      {claim.status === 'Pending' ? (
+                        <div className="flex gap-2 shrink-0">
+                          <button 
+                            onClick={() => handleApprove(claim.id, claim.employeeName || 'Employee', claim.amount)}
+                            disabled={updateStatusMut.isPending}
+                            className="px-3 py-1.5 bg-green-500 text-white rounded-lg font-bold text-xs flex items-center gap-1 hover:bg-green-600 transition-colors disabled:opacity-50"
+                          >
+                            <Check className="h-3.5 w-3.5" /> Approve
+                          </button>
+                          <button 
+                            onClick={() => handleReject(claim.id, claim.employeeName || 'Employee', claim.amount)}
+                            disabled={updateStatusMut.isPending}
+                            className="px-3 py-1.5 bg-red-500 text-white rounded-lg font-bold text-xs flex items-center gap-1 hover:bg-red-600 transition-colors disabled:opacity-50"
+                          >
+                            <X className="h-3.5 w-3.5" /> Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="shrink-0">
+                          <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase flex items-center gap-1.5 ${
+                            claim.status === 'Approved'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300 border border-green-200 dark:border-green-800'
+                              : 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800'
+                          }`}>
+                            {claim.status === 'Approved' ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
+                            {claim.status}
+                          </span>
+                        </div>
                       )}
                     </div>
                   ))
