@@ -135,11 +135,11 @@ export const Payroll: React.FC = () => {
   const selectedRun = runs.find(r => r.employeeId === selectedEmpId);
 
   const empBasic = selectedRun ? selectedRun.basic : (selectedEmployee?.basic || 15000);
-  const empHra = selectedRun ? selectedRun.hra : (selectedEmployee?.hra || 6000);
-  const empAllowance = selectedRun ? selectedRun.allowance : (selectedEmployee?.allowance || 4000);
-  const empPf = selectedRun ? selectedRun.pf : Math.round(Math.min(empBasic, 15000) * 0.12);
+  const empHra = selectedRun ? selectedRun.hra : (selectedEmployee?.hra || Math.round(empBasic * 0.4));
+  const empAllowance = selectedRun ? selectedRun.allowance : (selectedEmployee?.allowance || Math.round(empBasic * 0.2));
+  const empPf = selectedRun ? selectedRun.pf : Math.min(1800, Math.round(empBasic * 0.12));
   const empPt = selectedRun ? selectedRun.pt : 200;
-  const empTds = selectedRun ? selectedRun.tds : (empBasic > 30000 ? Math.round(empBasic * 0.1) : 0);
+  const empTds = selectedRun ? selectedRun.tds : (empBasic > 30000 ? Math.round(empBasic * 0.05) : 0);
   const empDeductions = selectedRun ? selectedRun.deductions : (empPf + empPt + empTds);
   const empNetSalary = selectedRun ? selectedRun.netSalary : ((empBasic + empHra + empAllowance) - empDeductions);
   const empBonus = selectedRun ? selectedRun.bonus : 0;
@@ -1503,9 +1503,9 @@ export const Payroll: React.FC = () => {
                     <tbody className="divide-y text-slate-650 dark:text-slate-350">
                       {dbEmployees.slice(0, 5).map((emp) => {
                         const curBasic = emp.basic || 15000;
-                        const curHra = emp.hra || 6000;
-                        const curAllowance = emp.allowance || 4000;
-                        const curGross = curBasic + curHra + curAllowance;
+                        const curHra = emp.hra || Math.round(curBasic * 0.4);
+                        const curAllowance = emp.allowance || Math.round(curBasic * 0.2);
+                        const curGross = emp.basic ? (emp.basic + (emp.hra || Math.round(emp.basic * 0.4)) + (emp.allowance || Math.round(emp.basic * 0.2))) : (curBasic + curHra + curAllowance);
 
                         let newGross = curGross;
                         if (bulkMode === 'percent') {

@@ -1,18 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ConfirmModal, ModalOptions } from '../components/ConfirmModal';
 import {
-    Asset,
-    ClaimRequest,
-    Employee,
-    FeedPost,
-    HelpTicket,
-    initialAssets,
-    initialClaims,
-    initialEmployees,
-    initialFeedPosts,
-    initialLeaveRequests,
-    initialTickets,
-    LeaveRequest
+  Asset,
+  ClaimRequest,
+  Employee,
+  FeedPost,
+  HelpTicket,
+  initialAssets,
+  initialClaims,
+  initialEmployees,
+  initialFeedPosts,
+  initialLeaveRequests,
+  initialTickets,
+  LeaveRequest
 } from '../mockData';
 
 export type { Asset, ClaimRequest, Employee, FeedPost, HelpTicket, LeaveRequest, ModalOptions };
@@ -347,7 +347,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsAuthenticated,
       currentUser,
       setCurrentUser,
-      organizationId, setOrganizationId,
       logout
     }}>
       {children}

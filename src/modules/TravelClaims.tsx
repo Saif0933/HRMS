@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from 'react';
 import {
   Check,
-  Upload,
-  X,
-  Paperclip,
+  Compass,
   FileText,
+  Paperclip,
+  Upload,
   Users,
-  Compass
+  X
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import React, { useEffect, useState } from 'react';
 import { useEmployees } from '../api/hook/useEmployee';
 import {
-  useClaims,
   useApplyClaim,
+  useClaims,
   useUpdateClaimStatus
 } from '../api/hook/useTravelClaims';
+import { useApp } from '../context/AppContext';
 
 export const TravelClaims: React.FC = () => {
   const { activeSubModule, setActiveSubModule, addAuditLog, showConfirm, showAlert } = useApp();

@@ -1,28 +1,28 @@
-import React from 'react';
-import { AppProvider, useApp } from './context/AppContext';
-import { Sidebar } from './components/Sidebar';
-import { Navbar } from './components/Navbar';
-import { Chatbot } from './components/Chatbot';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
+import { Chatbot } from './components/Chatbot';
+import { Navbar } from './components/Navbar';
+import { Sidebar } from './components/Sidebar';
+import { AppProvider, useApp } from './context/AppContext';
 
 // Modules imports
-import { Dashboard } from './modules/Dashboard';
-import { EmployeeManagement } from './modules/EmployeeManagement';
+import { Assets } from './modules/Assets';
 import { Attendance } from './modules/Attendance';
+import { Dashboard } from './modules/Dashboard';
+import { Documents } from './modules/Documents';
+import { EmployeeManagement } from './modules/EmployeeManagement';
+import { Engagement } from './modules/Engagement';
+import { HelpDesk } from './modules/HelpDesk';
+import { IdCardGenerator } from './modules/IdCardGenerator';
 import { Leave } from './modules/Leave';
+import { Letters } from './modules/Letters';
+import { Login } from './modules/Login';
 import { Payroll } from './modules/Payroll';
 import { Performance } from './modules/Performance';
-import { Engagement } from './modules/Engagement';
-import { TravelClaims } from './modules/TravelClaims';
-import { Timesheets } from './modules/Timesheets';
 import { Recruitment } from './modules/Recruitment';
-import { Documents } from './modules/Documents';
-import { Assets } from './modules/Assets';
-import { Letters } from './modules/Letters';
-import { HelpDesk } from './modules/HelpDesk';
 import { Subscription } from './modules/Subscription';
-import { Login } from './modules/Login';
-import { IdCardGenerator } from './modules/IdCardGenerator';
+import { Timesheets } from './modules/Timesheets';
+import { TravelClaims } from './modules/TravelClaims';
 
 const MainLayout: React.FC = () => {
   const { activeModule, theme, isAuthenticated, currentUser } = useApp();

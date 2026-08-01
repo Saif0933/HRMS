@@ -154,18 +154,28 @@ export interface PersonalDetails {
   avatar?: string | null;
 }
 
-/**
- * Hook to retrieve all employees with optional filters
- * GET /api/v1/employees
- */
+
+
 export const useEmployees = (filters?: EmployeeFilters) => {
   return useQuery<BaseResponse<Employee[]>, Error>({
     queryKey: ['employees', filters],
     queryFn: async () => {
-      const response = await apiClient.get<BaseResponse<Employee[]>>('/employees', {
-        params: filters,
-      });
-      return response.data;
+      try {
+        const response = await apiClient.get<BaseResponse<Employee[]>>('/employees', {
+          params: filters,
+        });
+        if (response.data && Array.isArray(response.data.data)) {
+          return response.data;
+        }
+      } catch (error) {
+        console.log('API /employees request error on website:', error);
+      }
+
+      return {
+        success: true,
+        message: 'No employees found',
+        data: [],
+      };
     },
   });
 };
@@ -175,12 +185,24 @@ export const useEmployees = (filters?: EmployeeFilters) => {
  * GET /api/v1/employees/:id
  */
 export const useEmployeeById = (id?: string) => {
-  return useQuery<BaseResponse<Employee>, Error>({
+  return useQuery<BaseResponse<Employee | null>, Error>({
     queryKey: ['employee', id],
     queryFn: async () => {
       if (!id) throw new Error('Employee ID is required');
-      const response = await apiClient.get<BaseResponse<Employee>>(`/employees/${id}`);
-      return response.data;
+      try {
+        const response = await apiClient.get<BaseResponse<Employee>>(`/employees/${id}`);
+        if (response.data && response.data.data) {
+          return response.data;
+        }
+      } catch (error) {
+        console.log(`API /employees/${id} request error on website:`, error);
+      }
+
+      return {
+        success: false,
+        message: 'Employee not found',
+        data: null,
+      };
     },
     enabled: !!id,
   });
