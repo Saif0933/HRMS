@@ -18,12 +18,15 @@ import {
   useApplyRegularization,
   useCreateGeofence,
   useCreatePunch,
+  useCreateShiftTiming,
   useDeleteGeofence,
+  useDeleteShiftTiming,
   useGeofences,
   usePunches,
   useRegularizations,
   useRosters,
   useSaveRosters,
+  useShiftTimings,
   useUpdateRegularization
 } from '../api/hook/useAttendance';
 import { useEmployees } from '../api/hook/useEmployee';
@@ -64,6 +67,109 @@ export const Attendance: React.FC = () => {
 
   const createFenceMut = useCreateGeofence();
   const deleteFenceMut = useDeleteGeofence();
+
+  // Organization Shift Timings Hooks & State
+  const { data: shiftTimingsRes } = useShiftTimings();
+  const createShiftTimingMut = useCreateShiftTiming();
+  const deleteShiftTimingMut = useDeleteShiftTiming();
+
+  const shiftTimingsList = shiftTimingsRes?.data || [];
+
+  const [showAddShiftModal, setShowAddShiftModal] = useState(false);
+  const [newShiftName, setNewShiftName] = useState('');
+  const [newShiftCode, setNewShiftCode] = useState('');
+  const [newShiftStart, setNewShiftStart] = useState('09:30 AM');
+  const [newShiftEnd, setNewShiftEnd] = useState('06:30 PM');
+  const [newShiftColor, setNewShiftColor] = useState('#6366f1');
+
+  const handleCreateShiftTiming = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newShiftName.trim() || !newShiftCode.trim()) {
+      showAlert('Please enter Shift Name and Shift Code.', 'Validation Error', 'warning');
+      return;
+    }
+
+    const codeUpper = newShiftCode.trim().toUpperCase().replace(/\s+/g, '_');
+    const startHour = newShiftStart.trim().split(':')[0] || '09';
+    const endHour = newShiftEnd.trim().split(':')[0] || '18';
+    const shortLabel = `${codeUpper.slice(0, 3)} (${startHour}-${endHour})`;
+
+    createShiftTimingMut.mutate(
+      {
+        code: codeUpper,
+        name: newShiftName.trim(),
+        startTime: newShiftStart.trim(),
+        endTime: newShiftEnd.trim(),
+        shortLabel,
+        color: newShiftColor,
+        bgColor: `${newShiftColor}18`,
+        isSystem: false,
+      },
+      {
+        onSuccess: () => {
+          addAuditLog('Created Organization Shift', 'Attendance Module', `Added new shift timing ${newShiftName} (${newShiftStart} - ${newShiftEnd})`);
+          showAlert(`Organization shift "${newShiftName}" saved successfully!`, 'Shift Added', 'success');
+          setNewShiftName('');
+          setNewShiftCode('');
+          setShowAddShiftModal(false);
+        },
+        onError: (err: any) => {
+          showAlert(err?.response?.data?.message || err.message || 'Failed to add shift', 'Error', 'danger');
+        },
+      }
+    );
+  };
+
+  const handleDeleteShiftTiming = (id: string, name: string) => {
+    showConfirm({
+      title: 'Delete Shift Timing',
+      message: `Are you sure you want to remove "${name}" shift timing from your organization?`,
+      type: 'confirm',
+      confirmText: 'Delete',
+      onConfirm: () => {
+        deleteShiftTimingMut.mutate(id, {
+          onSuccess: () => {
+            addAuditLog('Deleted Organization Shift', 'Attendance Module', `Removed shift timing ${name}`);
+            showAlert(`Shift "${name}" removed.`, 'Shift Removed', 'success');
+          },
+        });
+      },
+    });
+  };
+
+  // Shift & Geofence Validation for Punch Submit
+  const validatePunchRestrictions = (): boolean => {
+    // 1. SHIFT TIMING VALIDATION
+    const todayDayName = new Date().toLocaleDateString('en-US', { weekday: 'short' });
+    const empShiftToday = employeeShifts[selectedEmpId]?.[todayDayName] || 'General';
+
+    if (empShiftToday === 'Week Off' || empShiftToday === 'OFF') {
+      showAlert(
+        `Today (${todayDayName}) is scheduled as your Week Off according to your assigned shift roster.`,
+        'Week Off Restriction 🏖️',
+        'warning'
+      );
+      return false;
+    }
+
+    // 2. GEOFENCE LOCATION VALIDATION
+    if (fencesList.length > 0) {
+      if (!activeFenceMatch || !activeFenceMatch.isInside) {
+        const closestName = activeFenceMatch?.name || 'Authorized Office Location';
+        const dist = activeFenceMatch?.distance || 0;
+        const rad = activeFenceMatch?.radius || 100;
+
+        showAlert(
+          `Punch Restricted! You must be inside your designated geofence location (${closestName}). Current Distance: ${dist}m (Allowed Radius: ${rad}m).`,
+          'Geofence Location Restriction 📍',
+          'warning'
+        );
+        return false;
+      }
+    }
+
+    return true;
+  };
 
   // New Geofence Form State
   const [newFenceName, setNewFenceName] = useState('');
@@ -609,6 +715,10 @@ export const Attendance: React.FC = () => {
   };
 
   const handlePunchSubmit = async () => {
+    if (!validatePunchRestrictions()) {
+      return;
+    }
+
     if (verifyMethod === 'selfie' && !selfiePreview) {
       showAlert('Please capture a selfie before verifying punch.', 'Selfie Required', 'warning');
       return;
@@ -1170,6 +1280,16 @@ export const Attendance: React.FC = () => {
                 <option value="Week 30 (Jul 20 - Jul 26)">Week 30 (Jul 20 - Jul 26)</option>
               </select>
 
+              {/* Add Shift Button */}
+              <button
+                type="button"
+                onClick={() => setShowAddShiftModal(true)}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-sm hover:shadow transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Clock className="h-3.5 w-3.5 text-white" />
+                <span>+ Add Shift</span>
+              </button>
+
               {/* Save Button */}
               <button
                 type="button"
@@ -1183,15 +1303,118 @@ export const Attendance: React.FC = () => {
             </div>
           </div>
 
-          {/* Shift Timing Legend */}
+          {/* Shift Timing Legend & Organization Shift Cards */}
           <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50/70 dark:bg-slate-950/50 rounded-xl border border-slate-200/60 dark:border-slate-800 text-[11px]">
-            <span className="font-bold text-slate-500 dark:text-slate-400 uppercase text-[9px]">Shift Timings:</span>
-            <span className="px-2 py-0.5 rounded-md font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50">General (09:30 - 18:30)</span>
-            <span className="px-2 py-0.5 rounded-md font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/50">Morning (08:00 - 17:00)</span>
-            <span className="px-2 py-0.5 rounded-md font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/50">Evening (14:00 - 23:00)</span>
-            <span className="px-2 py-0.5 rounded-md font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/50">Night (22:00 - 07:00)</span>
-            <span className="px-2 py-0.5 rounded-md font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200/50 dark:border-slate-700/50">Week Off</span>
+            <span className="font-bold text-slate-500 dark:text-slate-400 uppercase text-[9px]">Organization Shift Timings:</span>
+            {shiftTimingsList.length > 0 ? (
+              shiftTimingsList.map(st => (
+                <span
+                  key={st.id || st.code}
+                  className="px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 border shadow-2xs"
+                  style={{ backgroundColor: st.bgColor || '#eef2ff', color: st.color || '#4f46e5', borderColor: st.color || '#6366f1' }}
+                >
+                  <span>{st.name} ({st.startTime} - {st.endTime})</span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteShiftTiming(st.id, st.name)}
+                    className="text-red-500 hover:text-red-700 font-extrabold ml-1 cursor-pointer"
+                    title="Remove shift timing"
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))
+            ) : (
+              <span className="text-slate-400 italic text-[11px]">
+                No organization shifts added yet. Click "+ Add Shift" to add custom shifts.
+              </span>
+            )}
           </div>
+
+          {/* Add Shift Timing Modal */}
+          {showAddShiftModal && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800">
+                  <h3 className="font-bold text-slate-800 dark:text-white text-sm flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-emerald-500" />
+                    <span>Add Organization Shift Timing</span>
+                  </h3>
+                  <button onClick={() => setShowAddShiftModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateShiftTiming} className="space-y-3.5 text-xs">
+                  <div className="space-y-1">
+                    <label className="text-slate-500 font-bold uppercase text-[10px]">Shift Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. General Shift, Early Morning, Split Shift"
+                      value={newShiftName}
+                      onChange={(e) => setNewShiftName(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-slate-500 font-bold uppercase text-[10px]">Shift Code *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. GENERAL, FLEXI, MORNING"
+                      value={newShiftCode}
+                      onChange={(e) => setNewShiftCode(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none uppercase"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-slate-500 font-bold uppercase text-[10px]">Start Time *</label>
+                      <input
+                        type="text"
+                        placeholder="09:30 AM"
+                        value={newShiftStart}
+                        onChange={(e) => setNewShiftStart(e.target.value)}
+                        required
+                        className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-slate-500 font-bold uppercase text-[10px]">End Time *</label>
+                      <input
+                        type="text"
+                        placeholder="06:30 PM"
+                        value={newShiftEnd}
+                        onChange={(e) => setNewShiftEnd(e.target.value)}
+                        required
+                        className="w-full px-3 py-2 border rounded-xl bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddShiftModal(false)}
+                      className="px-4 py-2 border rounded-xl text-slate-600 dark:text-slate-400 font-bold hover:bg-slate-100 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={createShiftTimingMut.isPending}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md disabled:opacity-50 cursor-pointer"
+                    >
+                      {createShiftTimingMut.isPending ? 'Saving...' : 'Save Organization Shift'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
           {/* Dynamic Employee Roster Table */}
           <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden overflow-x-auto shadow-inner">
