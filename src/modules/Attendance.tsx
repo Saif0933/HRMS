@@ -32,24 +32,46 @@ import {
 import { useEmployees } from '../api/hook/useEmployee';
 import { useApp } from '../context/AppContext';
 
+import { useProfile } from '../api/hook/useAuth';
+
 export const Attendance: React.FC = () => {
   const { activeSubModule, setActiveSubModule, addAuditLog, userRole, showConfirm, showAlert } = useApp();
+  const { data: profileRes } = useProfile();
+  const loggedUser = profileRes?.data?.user;
 
-  // Simulated active employee switcher
+  // Active employee switcher
   const [selectedEmpId, setSelectedEmpId] = useState('');
 
   // Fetch employees list
   const { data: dbEmployeesRes, isLoading: employeesLoading } = useEmployees();
   const employeesList = dbEmployeesRes?.data || [];
 
-  // Automatically select first employee as current user
+  // Match logged in user's profile with employee record from DB
+  const myEmployee = React.useMemo(() => {
+    if (!loggedUser) return null;
+    return employeesList.find(emp =>
+      (loggedUser.employeeId && emp.id === loggedUser.employeeId) ||
+      (loggedUser.id && emp.userId === loggedUser.id) ||
+      (loggedUser.email && emp.email?.toLowerCase() === loggedUser.email.toLowerCase()) ||
+      (loggedUser.phone && emp.phone === loggedUser.phone)
+    ) || null;
+  }, [employeesList, loggedUser]);
+
+  const myEmpId = myEmployee?.id || loggedUser?.employeeId || loggedUser?.id || '';
+
+  // Automatically select logged in user's employee record
   useEffect(() => {
-    if (employeesList.length > 0 && !selectedEmpId) {
+    const isAdminOrHR = userRole === 'Super Admin' || userRole === 'HR Admin';
+    if (myEmpId) {
+      if (!selectedEmpId || (!isAdminOrHR && selectedEmpId !== myEmpId)) {
+        setSelectedEmpId(myEmpId);
+      }
+    } else if (!selectedEmpId && profileRes && employeesList.length > 0) {
       setSelectedEmpId(employeesList[0].id);
     }
-  }, [employeesList, selectedEmpId]);
+  }, [employeesList, loggedUser, myEmpId, profileRes, selectedEmpId, userRole]);
 
-  const activeEmployee = employeesList.find(emp => emp.id === selectedEmpId);
+  const activeEmployee = employeesList.find(emp => emp.id === selectedEmpId) || myEmployee;
 
   // Queries & Mutations
   const { data: punchesRes, isLoading: punchesLoading } = usePunches(selectedEmpId);
@@ -687,11 +709,12 @@ export const Attendance: React.FC = () => {
   };
 
   const executePunch = () => {
-    if (!selectedEmpId) return;
+    const targetEmpId = myEmpId || selectedEmpId;
+    if (!targetEmpId) return;
     const methodStr = verifyMethod === 'selfie' ? "GPS + Selfie" : "GPS + Password";
 
     createPunchMut.mutate({
-      employeeId: selectedEmpId,
+      employeeId: targetEmpId,
       type: punchType,
       method: methodStr,
       lat: gpsCoordinates.lat,
