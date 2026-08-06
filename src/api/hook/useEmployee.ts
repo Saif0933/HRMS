@@ -161,12 +161,32 @@ export const useEmployees = (filters?: EmployeeFilters) => {
     queryKey: ['employees', filters],
     queryFn: async () => {
       try {
-        const response = await apiClient.get<BaseResponse<Employee[]>>('/employees', {
+        const response = await apiClient.get<any>('/employees', {
           params: filters,
         });
-        if (response.data && Array.isArray(response.data.data)) {
-          return response.data;
+
+        const raw = response.data;
+        let list: Employee[] = [];
+        if (Array.isArray(raw)) {
+          list = raw;
+        } else if (Array.isArray(raw?.data)) {
+          list = raw.data;
+        } else if (Array.isArray(raw?.data?.employees)) {
+          list = raw.data.employees;
+        } else if (Array.isArray(raw?.employees)) {
+          list = raw.employees;
         }
+
+        const mappedList = list.map(emp => ({
+          ...emp,
+          role: (emp as any).user?.role?.name || emp.role || emp.designation || 'Employee',
+        }));
+
+        return {
+          success: true,
+          message: mappedList.length > 0 ? 'Employees retrieved successfully' : 'No employees found',
+          data: mappedList,
+        };
       } catch (error) {
         console.log('API /employees request error on website:', error);
       }

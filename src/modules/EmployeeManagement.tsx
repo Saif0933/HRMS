@@ -102,7 +102,10 @@ const RoleManagementPanel: React.FC<RoleManagementPanelProps> = ({ employees }) 
 
   useEffect(() => {
     if (activeRole) {
-      const currentPermissionIds = (activeRole.permissions || []).map((p: any) => p.permission?.id || p.id || p);
+      const currentPermissionIds = (activeRole.permissions || []).flatMap((p: any) => {
+        const permObj = p.permission || p;
+        return [permObj.id, permObj.name].filter(Boolean);
+      });
       setSelectedPermissionIds(currentPermissionIds);
     } else {
       setSelectedPermissionIds([]);
@@ -145,11 +148,18 @@ const RoleManagementPanel: React.FC<RoleManagementPanelProps> = ({ employees }) 
   };
 
   const handleTogglePermission = (permissionId: string) => {
-    setSelectedPermissionIds(prev => 
-      prev.includes(permissionId) 
-        ? prev.filter(id => id !== permissionId) 
-        : [...prev, permissionId]
-    );
+    const targetPerm = permissions.find(p => p.id === permissionId || p.name === permissionId);
+    const targetId = targetPerm?.id || permissionId;
+    const targetName = targetPerm?.name || permissionId;
+
+    setSelectedPermissionIds(prev => {
+      const hasIt = prev.includes(targetId) || prev.includes(targetName);
+      if (hasIt) {
+        return prev.filter(id => id !== targetId && id !== targetName);
+      } else {
+        return [...prev, targetId, targetName];
+      }
+    });
   };
 
   const handleSelectAllPermissions = () => {
@@ -160,9 +170,16 @@ const RoleManagementPanel: React.FC<RoleManagementPanelProps> = ({ employees }) 
 
   const handleSavePermissions = () => {
     if (!activeRole) return;
+    const resolvedIds = Array.from(new Set(
+      selectedPermissionIds.map(id => {
+        const found = permissions.find(p => p.id === id || p.name === id);
+        return found ? found.id : id;
+      })
+    ));
+
     updateRoleMutation.mutate({
       id: activeRole.id,
-      data: { permissionIds: selectedPermissionIds }
+      data: { permissionIds: resolvedIds }
     }, {
       onSuccess: () => {
         alert("Permissions saved successfully for role " + activeRole.name);
@@ -189,9 +206,9 @@ const RoleManagementPanel: React.FC<RoleManagementPanelProps> = ({ employees }) 
     const selectedEmp = employees.find(emp => emp.id === assignUser);
     if (!selectedEmp) return;
     
-    const userIdentifier = selectedEmp.userId || selectedEmp.email || selectedEmp.phone;
+    const userIdentifier = selectedEmp.userId || selectedEmp.email || selectedEmp.phone || selectedEmp.id;
     if (!userIdentifier) {
-      alert("This employee does not have a user ID, email, or phone to identify their user account.");
+      alert("This employee does not have a user ID, email, phone, or ID to identify their account.");
       return;
     }
 
@@ -914,7 +931,7 @@ export const EmployeeManagement: React.FC = () => {
               emp.status === 'RESIGNED' ? 'Resigned' : 'Terminated'),
       joiningDate: emp.joiningDate ? new Date(emp.joiningDate).toISOString().split('T')[0] : '',
       location: emp.location || '',
-      role: override?.role || emp.designation || (emp as any).user?.role?.name || '',
+      role: (emp as any).user?.role?.name || emp.role || override?.role || emp.designation || '',
       department: override?.department || (typeof emp.department === 'string' ? emp.department : (emp.department?.name || '')),
       manager: emp.manager?.name || '',
       basic: override?.basic ?? emp.basic ?? 0,
